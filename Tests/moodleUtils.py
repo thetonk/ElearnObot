@@ -1,12 +1,12 @@
-import requests, config, hashlib
+import requests, config
 
 class moodleInterface():
 
     def __init__(self):
         self.URL = "https://{domain}/webservice/rest/server.php?wstoken={token}&moodlewsrestformat=json".format(domain=config.DOMAIN, token=config.API_TOKEN)
 
-    def generateMD5Hash(self, *,fileURL: str):
-        return hashlib.md5(requests.get(fileURL).content).hexdigest() #kinda memory inefficient though
+    # def generateMD5Hash(self, *,fileURL: str):
+    #     return hashlib.md5(requests.get(fileURL).content).hexdigest() #kinda memory inefficient though
 
     def getCourses(self):
         parameters = {"wsfunction": "core_enrol_get_users_courses", "userid": config.USERID}
@@ -64,11 +64,10 @@ class Discussion:
 
         self.name = name
         self.ID = discussionID
-        #self.URL = discussionURL
+        self.URL = "https://{}/mod/forum/discuss.php?d={}".format(config.DOMAIN, discussionID)
         self.message = message
         self.timeModified = timeModified
         self.files=files
-
 
 class Page:
     def __init__(self, *,  name, pageID, pageURL):
@@ -76,15 +75,16 @@ class Page:
         self.ID = pageID
         self.URL = pageURL
 
+class Label:
+        def __init__(self, *, description):
+            self.description = description
+
 class Forum:
     def __init__(self, *, name, forumID, forumURL, discussionList):
-        #TODO: Generate discussion list
-
         self.name = name
         self.ID = forumID
         self.URL = forumURL
         self.discussions = discussionList
-
 
 class Assignment:
     def __init__(self,*, name, assignmentID,assignmentURL, timeOpened, timeDue):
@@ -106,12 +106,9 @@ class Workshop:
         self.ID = workshopID
         self.URL = workshopURL
 
-
 class Course:
 
     def __init__(self, *,fullName,courseID,summary):
-        #TODO: Generate forum, file, quizz and assignment lists
-
         self.ID = courseID
         self.name = fullName
         self.summary = summary
@@ -119,11 +116,14 @@ class Course:
         self.quizzes = []
         self.assignments = []
         self.files = []
+        self.workshops = []
+        self.pages = []
+        self.labels = []
+        #self.refresh()
+
+    def refresh(self):
         moodle = moodleInterface()
-
-        #NOTE: Use instance field, not id field when parsing getCourseData()
-
-        for unit in moodle.getCourseData(courseID=courseID):
+        for unit in moodle.getCourseData(courseID=self.ID):
             modules = unit["modules"]
             for module in modules:
                 moduleType = module["modplural"]
@@ -164,19 +164,38 @@ class Course:
 
 
                 elif moduleType == "Quizzes":
-                    pass #quiz
+                    self.quizzes.append(Quiz(
+                        name=module["name"],
+                        quizID=module["id"],
+                        quizURL=module["url"]
+                    ))
 
                 elif moduleType == "Assignments":
-                    pass #assignment
-
+                    self.assignments.append(Assignment(
+                        name = module["name"],
+                        assignmentID = module["id"],
+                        assignmentURL = module["url"],
+                        timeOpened = module["dates"][0]["timestamp"],
+                        timeDue = module["dates"][1]["timestamp"]
+                    ))
                 elif moduleType == "Workshops":
-                    pass #assignment
+                    self.workshops.append(Workshop(
+                        name = module["name"],
+                        workshopID = module["id"],
+                        workshopURL = module["url"]
+                    ))
 
                 elif moduleType == "Labels":
-                    pass #label
+                    self.labels.append(Label(
+                        description = module["description"]
+                    ))
 
                 elif moduleType == "Pages":
-                    pass #label
+                    self.pages.append(Page(
+                        name = module["name"],
+                        pageID = module["id"],
+                        pageURL = module["url"]
+                    ))
 
                 if "contents" in module:
                     files = module["contents"]

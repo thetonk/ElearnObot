@@ -27,7 +27,7 @@ Class Assignment:
 		TimeOpened: long
 		TimeDue: long
 
-Class quiz:
+Class Quiz:
 	Fields:
 		Id: int
 		Name: string
@@ -52,7 +52,7 @@ Class Discussion:
 		discussion: int (=id impostor)
 		Url: string
 		timeModified: long
-		Files: file[] (from messageinlinefiles)
+		Files: file[] (from attachments)
 		Message: string
 
 Class Course:

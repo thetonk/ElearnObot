@@ -1,0 +1,65 @@
+Tables:
+
+  Courses:
+    Columns:
+      ID: int primary key
+      Fullname: string
+      Summary: string
+
+  File:
+    Columns:
+      ID: int primary key autoincrement
+      courseID: int foreign key
+      Filename: string
+      Path: String
+      Size: int
+      TimeModified: long
+      Mimetype: string
+      Author: string
+      FileUrl: string
+      Licence: string
+      MD5: string
+
+  Assignment:
+    Columns:
+      ID: int primary key
+      courseID: int foreign key
+      Name: string
+      Url: string
+      TimeOpened: long
+      TimeDue: long
+
+  Class Page:
+    Fields:
+      Name: string
+      Id: int primary key
+      courseID: int foreign key
+      Url: string (index.html) (?)
+
+  Class Label:
+    Fields:
+      courseID: int foreign key
+      Description: string (html)
+
+  Class Workshop:
+    Fields:
+      Id: int primary key
+      Name: string
+      Url: string
+      courseID: int foreign key
+
+  Class Forum:
+    Fields:
+      Name: string
+      Id: int primary key
+      Url: string
+      courseID: int foreign key
+
+  Class Discussion:
+    Fields:
+      Name: string
+      ID: int primary key
+      Url: string
+      timeModified: long
+      Message: string
+      courseID: int foreign key

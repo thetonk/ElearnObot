@@ -13,11 +13,13 @@ courses = []
 
 for course in moodle.getCourses():
     id = course["id"]
-    courses.append(Course(
+    c = Course(
         fullName=course["fullname"],
         courseID=id,
         summary=course["summary"]
-        ))
+        )
+    c.refresh()
+    courses.append(c)
     fileOut.write("==============================LESSON {}==================================\n".format(course["fullname"]))
     courseUnits = moodle.getCourseData(courseID=id)
     for unit in courseUnits:
