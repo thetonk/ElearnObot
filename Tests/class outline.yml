@@ -1,0 +1,67 @@
+Class File:
+	Fields:
+		Filename: string
+		Path: String
+		Size: int
+		TimeModified: long
+		Mimetype: string
+		Author: string
+		FileUrl: string
+		Licence: string
+
+Class Page:
+	Fields:
+		Name: string
+		Id: int
+		Url: string (index.html)
+
+Class Label:
+	Fields:
+		Description: string (html)
+
+Class Assignment:
+	Fields:
+		Id: int
+		Name: string
+		Url: string
+		TimeOpened: long
+		TimeDue: long
+
+Class quiz:
+	Fields:
+		Id: int
+		Name: string
+		Url: string
+
+Class Workshop:
+	Fields:
+		Id: int
+		Name: string
+		Url: string
+
+Class Forum:
+	Fields:
+		Name: string
+		Id: int
+		Url: string
+		Discussions: discussion[]
+
+Class Discussion:
+	Fields:
+		Name: string
+		discussion: int (=id impostor)
+		Url: string
+		timeModified: long
+		Files: file[] (from messageinlinefiles)
+		Message: string
+
+Class Course:
+	Fields:
+		Fullname: string
+		Id: int
+		Summary: string (html)
+		Forums: forum[]
+		Files: file[]
+		Quizzes: quiz[]
+		Assignments: assignment[]
+		Workshops: workshop[]
