@@ -1,4 +1,5 @@
 import requests, config
+from bs4 import BeautifulSoup
 
 class moodleInterface():
 
@@ -70,10 +71,11 @@ class Discussion:
         self.files=files
 
 class Page:
-    def __init__(self, *,  name, pageID, pageURL):
+    def __init__(self, *,  name, pageID, pageURL, description):
         self.name = name
         self.ID = pageID
         self.URL = pageURL
+        self.description = description
 
 class Label:
         def __init__(self, *, description):
@@ -186,18 +188,26 @@ class Course:
                     ))
 
                 elif moduleType == "Labels":
+                    soup = BeautifulSoup(module["description"],"html.parser")
                     self.labels.append(Label(
-                        description = module["description"]
+                        description = soup.get_text()
                     ))
 
                 elif moduleType == "Pages":
+
+                    #NOTE: pages always have one index.html file which is their text content.
+                    
+                    htmlpath = module["contents"][0]["fileurl"] 
+                    html = requests.get(htmlpath+"&token={}".format(config.API_TOKEN)).content
+                    soup = BeautifulSoup(html, "html.parser")
                     self.pages.append(Page(
                         name = module["name"],
                         pageID = module["id"],
-                        pageURL = module["url"]
+                        pageURL = module["url"],
+                        description=soup.get_text()
                     ))
 
-                if "contents" in module:
+                if "contents" in module and moduleType != "Pages":
                     files = module["contents"]
                     for file in files:
                         print("FILENAME "+file["filename"])

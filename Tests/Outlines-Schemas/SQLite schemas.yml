@@ -29,33 +29,34 @@ Tables:
       TimeOpened: long
       TimeDue: long
 
-  Class Page:
+  Page:
     Fields:
       Name: string
       Id: int primary key
       courseID: int foreign key
-      Url: string (index.html) (?)
+      Url: string
+      Description: string
 
-  Class Label:
+  Label:
     Fields:
       courseID: int foreign key
       Description: string (html)
 
-  Class Workshop:
+  Workshop:
     Fields:
       Id: int primary key
       Name: string
       Url: string
       courseID: int foreign key
 
-  Class Forum:
+  Forum:
     Fields:
       Name: string
       Id: int primary key
       Url: string
       courseID: int foreign key
 
-  Class Discussion:
+  Discussion:
     Fields:
       Name: string
       ID: int primary key

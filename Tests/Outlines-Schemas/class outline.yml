@@ -13,11 +13,12 @@ Class Page:
 	Fields:
 		Name: string
 		Id: int
-		Url: string (index.html)
+		Url: string 
+		Description: string
 
 Class Label:
 	Fields:
-		Description: string (html)
+		Description: string
 
 Class Assignment:
 	Fields:
