@@ -19,6 +19,8 @@ Tables:
       FileUrl: string
       Licence: string
       MD5: string
+      DiscussionID: int nullable
+      moduleID: int nullable
 
   Assignment:
     Columns:
@@ -39,6 +41,7 @@ Tables:
 
   Label:
     Fields:
+      ID: int primary key autoincrement
       courseID: int foreign key
       Description: string (html)
 
@@ -64,3 +67,10 @@ Tables:
       timeModified: long
       Message: string
       courseID: int foreign key
+  
+  Quiz:
+    Fields:
+      Name: string
+      courseID: int foreign key
+      ID: int primary key
+      Url: string

@@ -8,6 +8,7 @@ Class File:
 		Author: string
 		FileUrl: string
 		Licence: string
+		moduleID: int
 
 Class Page:
 	Fields:

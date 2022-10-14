@@ -49,15 +49,16 @@ class moodleInterface():
 
 
 class File:
-    def __init__(self, *, name, path,size, timeModified, mimeType,author, fileURL, License):
+    def __init__(self, *, name, path,size, timeModified, mimeType,author, fileURL, License, moduleID):
         self.filename = name
         self.path = path
         self.size = size
         self.mimeType = mimeType
         self.author = author
         self.URL = fileURL
-        self.timeMOdified = timeModified
+        self.timeModified = timeModified
         self.License = License
+        self.moduleID = moduleID
 
 class Discussion:
     def __init__(self,*, name, discussionID, message, timeModified,files):
@@ -113,7 +114,8 @@ class Course:
     def __init__(self, *,fullName,courseID,summary):
         self.ID = courseID
         self.name = fullName
-        self.summary = summary
+        soup = BeautifulSoup(summary, "html.parser")
+        self.summary = soup.get_text()
         self.forums = []
         self.quizzes = []
         self.assignments = []
@@ -145,14 +147,15 @@ class Course:
                                     fileURL=attachment["fileurl"],
                                     mimeType=attachment["mimetype"],
                                     author=discussion["usermodifiedfullname"],
-                                    License=""
+                                    License="",
+                                    moduleID=-1
                                 ))
                                 print(attachments[0].filename)
-
+                        soup = BeautifulSoup(discussion["message"], "html.parser")
                         discussions.append(Discussion(
                             name=discussion["name"],
                             discussionID=discussion["discussion"],
-                            message=discussion["message"],
+                            message=soup.get_text(),
                             timeModified=discussion["modified"],
                             files=attachments
                         ))
@@ -219,5 +222,6 @@ class Course:
                             mimeType= file["mimetype"] if "mimetype" in file else "",
                             size=file["filesize"],
                             author=file["author"],
-                            License=file["license"]
+                            License=file["license"],
+                            moduleID=module["id"]
                          ))
