@@ -1,5 +1,0 @@
-API_TOKEN = "your-moodle-api-token"
-DOMAIN = "your-domain"
-USERID = "your-moodle-user-id"
-BOT_TOKEN = "your-discord-bot-token"
-CHANNEL_ID = "your-discord-channel-id"
