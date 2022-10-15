@@ -1,2 +1,3 @@
-# ElearnObot
-A bot to scrape Elearning.auth.gr
+# Tests
+
+The place for all testing scripts (sorry it.auth 😛)
