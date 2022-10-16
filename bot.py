@@ -14,7 +14,6 @@ def filesizeConversion(bytes):
         return "{}MB".format(round(out, 2))
     return "{}KB".format(round(out, 2))
 
-
 client = commands.Bot(intents=nextcord.Intents.default())
 #client.remove_command("help")
 
@@ -153,6 +152,21 @@ class discussionsView(View):
         else:
             return
 
+async def messageSplitter(channel, message: str, itemsCountPerMessage: int, itemType: str, course: Course, itemState: str, embedColor: int):
+    items = message.split("\n")
+    del items[len(items) - 1] #delete last empty item, since it's useless
+    totalMessages = math.ceil(len(items) / float(itemsCountPerMessage))
+    for m in range(totalMessages):
+        messages = ""
+        for message in items[:itemsCountPerMessage]:
+            messages += message+"\n"
+        embed = nextcord.Embed(title=f"{itemType} list: {m+1}/{totalMessages}", color=embedColor, description=messages)
+        embed.set_author(name=f"{itemState} {itemType}s in course: {course.name}", url=course.URL)
+        dc_print(f"Sending {itemState} {itemType} in course {course.name} by parts (too many characters for single message!). Progress: {m+1}/{totalMessages}")
+        await channel.send(embed=embed)
+        del items[:itemsCountPerMessage]
+
+
 @client.event
 async def on_ready():
     dc_print(f"Connected as {client.user}, starting Moodle thread")
@@ -223,6 +237,15 @@ async def check():
 
     connector = sqlite3.connect(config.SQLITE_DB_PATH)
     cursor = connector.cursor()
+    courseCount = cursor.execute("SELECT COUNT(courseID) FROM Courses").fetchone()[0]
+    FIRST_RUN = True
+
+    if courseCount > 0:
+        mdl_print("Database is not empty!")
+        FIRST_RUN = False
+    else:
+        mdl_print("Database empty! This is the first run!")
+
     for course in courses:
         # this is spaghetti (I use these for discord)
         filesAdded = ""
@@ -425,10 +448,15 @@ async def check():
                     cursor.execute("INSERT OR IGNORE INTO Discussions(ID, courseID, Name, URL, TimeModified, Message, forumID) VALUES (?,?,?,?,?,?,?)",(
                         (discussion.ID, course.ID, discussion.name, discussion.URL, discussion.timeModified, discussion.message, forum.ID)
                     ))
-                    discussionEmbed = nextcord.Embed(title=discussion.name, url=discussion.URL, color=config.DISCUSSION_EMBED_COLOR, description=discussion.message)
-                    discussionEmbed.set_author(name=f"New discussion in forum \'{forum.name}\' of course {course.name}", url=forum.URL)
-                    dc_print(f"Sending a new discussion ({discussion.name})!") ## The only call made to Discord from within the loop
-                    await notificationCh.send(embed=discussionEmbed)
+                    if not FIRST_RUN:
+                        discussionEmbed = nextcord.Embed(title=discussion.name, url=discussion.URL, color=config.DISCUSSION_EMBED_COLOR, description=discussion.message)
+                        if len(discussion.message) > 4096:
+                            await messageSplitter(notificationCh, discussion.message, 5, "Discussion", course, "NEW", config.DISCUSSION_EMBED_COLOR)
+
+                        elif len(discussion.message) > 0 and len(discussion.message) < 4096:
+                            discussionEmbed.set_author(name=f"New discussion in forum \'{forum.name}\' of course {course.name}", url=forum.URL)
+                            dc_print(f"Sending a new discussion ({discussion.name})!") ## The only call made to Discord from within the loop
+                            await notificationCh.send(embed=discussionEmbed)
                 for attachment in discussion.files:
                     data = cursor.execute(filesCheckDiscussionQuery, (attachment.filename,course.ID,attachment.path, discussion.ID)).fetchone()
                     if data != None:
@@ -448,6 +476,7 @@ async def check():
                             (course.ID, attachment.filename, attachment.path, attachment.size, attachment.timeModified, attachment.mimeType, attachment.author, attachment.URL, attachment.License,
                                 "", discussion.ID)
                             ))
+
                         attachmentsAdded += f"+ [{attachment.filename}]({attachment.URL.replace('webservice/', '')}) ({filesizeConversion(attachment.size)}) by {attachment.author} in discussion [{discussion.name}]({discussion.URL})\n"
                 #check attachment deletion (by URL)
                 for localAttachment in cursor.execute("SELECT URL, Filename FROM Files WHERE courseID=? AND discussionID=?", (course.ID, discussion.ID)).fetchall():
@@ -458,6 +487,7 @@ async def check():
                         mdl_print(f"Attachment {localAttachment[1]} from discussion {discussion.name} deleted!")
                         cursor.execute(filesDeleteDiscussionsQuery, (localAttachment[0], discussion.ID))
                         attachmentsDeleted += f"- ~~{localAttachment[1]}~~ in discussion [{discussion.name}]({discussion.URL})\n"
+
             for localDiscussion in cursor.execute("SELECT ID, Name FROM Discussions WHERE forumID=?", (forum.ID,)).fetchall():
                 forumDiscussionIDs = []
                 for discussion in forum.discussions:
@@ -478,119 +508,143 @@ async def check():
                 cursor.execute("DELETE FROM Discussions WHERE forumID=?", (localForum[0],))
                 cursor.execute("DELETE FROM Forums WHERE ID=?", (localForum[0],))
                 forumsDeleted += f"- ~~{localForum[1]}~~\n"
-        if len(filesAdded) > 0:
-            embed = nextcord.Embed(title="File list:", color=config.FILE_EMBED_COLOR, description=filesAdded)
-            embed.set_author(name=f"New files in course: {course.name}", url=course.URL)
-            dc_print(f"Sending new files in course {course.name}")
-            await notificationCh.send(embed=embed)
-        if len(filesChanged) > 0:
-            embed = nextcord.Embed(title="File list:", color=config.FILE_EMBED_COLOR, description=filesChanged)
-            embed.set_author(name=f"Files changed in course: {course.name}", url=course.URL)
-            dc_print(f"Sending changed files in course: {course.name}")
-            await notificationCh.send(embed=embed)
-        if len(filesDeleted) > 0:
-            embed = nextcord.Embed(title="File list:", color=config.FILE_EMBED_COLOR, description=filesDeleted)
-            embed.set_author(name=f"Files deleted in course: {course.name}", url=course.URL)
-            dc_print(f"Sending deleted files in course: {course.name}")
-            await notificationCh.send(embed=embed)
 
-        if len(quizzesAdded) > 0:
-            embed = nextcord.Embed(title="Quiz list:", color=config.QUIZ_EMBED_COLOR, description=quizzesAdded)
-            embed.set_author(name=f"New quizzes in course: {course.name}", url=course.URL)
-            dc_print(f"Sending new quizzes in course {course.name}")
-            await notificationCh.send(embed=embed)
-        if len(quizzesChanged) > 0:
-            embed = nextcord.Embed(title="Quiz list:", color=config.QUIZ_EMBED_COLOR, description=quizzesChanged)
-            embed.set_author(name=f"Quizzes changed in course: {course.name}", url=course.URL)
-            dc_print(f"Sending changed quizzes in course: {course.name}")
-            await notificationCh.send(embed=embed)
-        if len(quizzesDeleted) > 0:
-            embed = nextcord.Embed(title="Quiz list:", color=config.QUIZ_EMBED_COLOR, description=quizzesDeleted)
-            embed.set_author(name=f"Quizzes deleted in course: {course.name}", url=course.URL)
-            dc_print(f"Sending deleted quizzes in course: {course.name}")
-            await notificationCh.send(embed=embed)
+        if not FIRST_RUN:
+            if len(filesAdded) > 0 and len(filesAdded) < 4096:
+                embed = nextcord.Embed(title="File list:", color=config.FILE_EMBED_COLOR, description=filesAdded)
+                embed.set_author(name=f"New files in course: {course.name}", url=course.URL)
+                dc_print(f"Sending new files in course {course.name}")
+                await notificationCh.send(embed=embed)
+            elif len(filesAdded) > 4096:
+                await messageSplitter(notificationCh, filesAdded,5,"File",course, "NEW", config.FILE_EMBED_COLOR)
 
-        if len(assignmentsAdded) > 0:
-            embed = nextcord.Embed(title="Assignment list:", color=config.ASSIGNMENT_EMBED_COLOR, description=assignmentsAdded)
-            embed.set_author(name=f"New assignments in course: {course.name}", url=course.URL)
-            dc_print(f"Sending new assignments in course {course.name}")
-            await notificationCh.send(embed=embed)
-        if len(assignmentsChanged) > 0:
-            embed = nextcord.Embed(title="Assignment list:", color=config.ASSIGNMENT_EMBED_COLOR, description=assignmentsChanged)
-            embed.set_author(name=f"Assignments changed in course: {course.name}", url=course.URL)
-            dc_print(f"Sending changed assignments in course: {course.name}")
-            await notificationCh.send(embed=embed)
-        if len(assignmentsDeleted) > 0:
-            embed = nextcord.Embed(title="Assignment list:", color=config.ASSIGNMENT_EMBED_COLOR, description=assignmentsDeleted)
-            embed.set_author(name=f"assignments deleted in course: {course.name}", url=course.URL)
-            dc_print(f"Sending deleted assignments in course: {course.name}")
-            await notificationCh.send(embed=embed)
-        
-        if len(pagesAdded) > 0:
-            embed = nextcord.Embed(title="Page list:", color=config.PAGE_EMBED_COLOR, description=pagesAdded)
-            embed.set_author(name=f"New pages in course: {course.name}", url=course.URL)
-            dc_print(f"Sending new pages in course {course.name}")
-            await notificationCh.send(embed=embed)
-        if len(pagesChanged) > 0:
-            embed = nextcord.Embed(title="Page list:", color=config.PAGE_EMBED_COLOR, description=pagesChanged)
-            embed.set_author(name=f"Pages changed in course: {course.name}", url=course.URL)
-            dc_print(f"Sending changed pages in course: {course.name}")
-            await notificationCh.send(embed=embed)
-        if len(pagesDeleted) > 0:
-            embed = nextcord.Embed(title="Page list:", color=config.PAGE_EMBED_COLOR, description=pagesDeleted)
-            embed.set_author(name=f"Pages deleted in course: {course.name}", url=course.URL)
-            dc_print(f"Sending deleted pages in course: {course.name}")
-            await notificationCh.send(embed=embed)
+            if len(filesChanged) > 0 and len(filesChanged) < 4096:
+                embed = nextcord.Embed(title="File list:", color=config.FILE_EMBED_COLOR, description=filesChanged)
+                embed.set_author(name=f"Files changed in course: {course.name}", url=course.URL)
+                dc_print(f"Sending changed files in course: {course.name}")
+                await notificationCh.send(embed=embed)
+            elif len(filesChanged) > 4096:
+                await messageSplitter(notificationCh, filesChanged,5,"File",course, "CHANGED", config.FILE_EMBED_COLOR)
 
-        if len(workshopsAdded) > 0:
-            embed = nextcord.Embed(title="Workshop list:", color=config.WORKSHOP_EMBED_COLOR, description=workshopsAdded)
-            embed.set_author(name=f"New workshops in course: {course.name}", url=course.URL)
-            dc_print(f"Sending new workshops in course {course.name}")
-            await notificationCh.send(embed=embed)
-        if len(workshopsChanged) > 0:
-            embed = nextcord.Embed(title="Workshop list:", color=config.WORKSHOP_EMBED_COLOR, description=workshopsChanged)
-            embed.set_author(name=f"Workshops changed in course: {course.name}", url=course.URL)
-            dc_print(f"Sending changed workshops in course: {course.name}")
-            await notificationCh.send(embed=embed)
-        if len(workshopsDeleted) > 0:
-            embed = nextcord.Embed(title="Workshop list:", color=config.WORKSHOP_EMBED_COLOR, description=workshopsDeleted)
-            embed.set_author(name=f"Workshops deleted in course: {course.name}", url=course.URL)
-            dc_print(f"Sending deleted workshops in course: {course.name}")
-            await notificationCh.send(embed=embed)
+            if len(filesDeleted) > 0 and len(filesDeleted) < 4096:
+                embed = nextcord.Embed(title="File list:", color=config.FILE_EMBED_COLOR, description=filesDeleted)
+                embed.set_author(name=f"Files deleted in course: {course.name}", url=course.URL)
+                dc_print(f"Sending deleted files in course: {course.name}")
+                await notificationCh.send(embed=embed)
+            elif len(filesDeleted) > 4096:
+                await messageSplitter(notificationCh, filesDeleted, 5,"File",course, "DELETED", config.FILE_EMBED_COLOR)
 
-        if len(forumsDeleted) > 0:
-            embed = nextcord.Embed(title="Forum list:", color=config.FORUM_EMBED_COLOR, description=forumsDeleted)
-            embed.set_author(name=f"Forums deleted in course: {course.name}", url=course.URL)
-            dc_print(f"Sending deleted forums in course: {course.name}")
-            await notificationCh.send(embed=embed)
+            if len(quizzesAdded) > 0:
+                embed = nextcord.Embed(title="Quiz list:", color=config.QUIZ_EMBED_COLOR, description=quizzesAdded)
+                embed.set_author(name=f"New quizzes in course: {course.name}", url=course.URL)
+                dc_print(f"Sending new quizzes in course {course.name}")
+                await notificationCh.send(embed=embed)
+            if len(quizzesChanged) > 0:
+                embed = nextcord.Embed(title="Quiz list:", color=config.QUIZ_EMBED_COLOR, description=quizzesChanged)
+                embed.set_author(name=f"Quizzes changed in course: {course.name}", url=course.URL)
+                dc_print(f"Sending changed quizzes in course: {course.name}")
+                await notificationCh.send(embed=embed)
+            if len(quizzesDeleted) > 0:
+                embed = nextcord.Embed(title="Quiz list:", color=config.QUIZ_EMBED_COLOR, description=quizzesDeleted)
+                embed.set_author(name=f"Quizzes deleted in course: {course.name}", url=course.URL)
+                dc_print(f"Sending deleted quizzes in course: {course.name}")
+                await notificationCh.send(embed=embed)
 
-        if len(discussionsChanged) > 0:
-            embed = nextcord.Embed(title="Discussion list:", color=config.DISCUSSION_EMBED_COLOR, description=discussionsChanged)
-            embed.set_author(name=f"Discussions changed in course: {course.name}", url=course.URL)
-            dc_print(f"Sending changed discussions in course: {course.name}")
-            await notificationCh.send(embed=embed)
-        if len(discussionsDeleted) > 0:
-            embed = nextcord.Embed(title="Discussion list:", color=config.DISCUSSION_EMBED_COLOR, description=discussionsDeleted)
-            embed.set_author(name=f"Discussions deleted in course: {course.name}", url=course.URL)
-            dc_print(f"Sending deleted workshops in course: {course.name}")
-            await notificationCh.send(embed=embed)
-        
-        if len(attachmentsAdded) > 0:
-            embed = nextcord.Embed(title="Attachment list:", color=config.ATTACHMENT_EMBED_COLOR, description=attachmentsAdded)
-            embed.set_author(name=f"New attachments in course: {course.name}", url=course.URL)
-            dc_print(f"Sending new attachments in course {course.name}")
-            await notificationCh.send(embed=embed)
-        if len(attachmentsChanged) > 0:
-            embed = nextcord.Embed(title="Attachment list:", color=config.ATTACHMENT_EMBED_COLOR, description=attachmentsChanged)
-            embed.set_author(name=f"Attachments changed in course: {course.name}", url=course.URL)
-            dc_print(f"Sending changed attachments in course: {course.name}")
-            await notificationCh.send(embed=embed)
-        if len(attachmentsDeleted) > 0:
-            embed = nextcord.Embed(title="Attachment list:", color=config.ATTACHMENT_EMBED_COLOR, description=attachmentsDeleted)
-            embed.set_author(name=f"Attachments deleted in course: {course.name}", url=course.URL)
-            dc_print(f"Sending deleted attachments in course: {course.name}")
-            await notificationCh.send(embed=embed)
+            if len(assignmentsAdded) > 0:
+                embed = nextcord.Embed(title="Assignment list:", color=config.ASSIGNMENT_EMBED_COLOR, description=assignmentsAdded)
+                embed.set_author(name=f"New assignments in course: {course.name}", url=course.URL)
+                dc_print(f"Sending new assignments in course {course.name}")
+                await notificationCh.send(embed=embed)
+            if len(assignmentsChanged) > 0:
+                embed = nextcord.Embed(title="Assignment list:", color=config.ASSIGNMENT_EMBED_COLOR, description=assignmentsChanged)
+                embed.set_author(name=f"Assignments changed in course: {course.name}", url=course.URL)
+                dc_print(f"Sending changed assignments in course: {course.name}")
+                await notificationCh.send(embed=embed)
+            if len(assignmentsDeleted) > 0:
+                embed = nextcord.Embed(title="Assignment list:", color=config.ASSIGNMENT_EMBED_COLOR, description=assignmentsDeleted)
+                embed.set_author(name=f"assignments deleted in course: {course.name}", url=course.URL)
+                dc_print(f"Sending deleted assignments in course: {course.name}")
+                await notificationCh.send(embed=embed)
 
+            if len(pagesAdded) > 0:
+                embed = nextcord.Embed(title="Page list:", color=config.PAGE_EMBED_COLOR, description=pagesAdded)
+                embed.set_author(name=f"New pages in course: {course.name}", url=course.URL)
+                dc_print(f"Sending new pages in course {course.name}")
+                await notificationCh.send(embed=embed)
+            if len(pagesChanged) > 0:
+                embed = nextcord.Embed(title="Page list:", color=config.PAGE_EMBED_COLOR, description=pagesChanged)
+                embed.set_author(name=f"Pages changed in course: {course.name}", url=course.URL)
+                dc_print(f"Sending changed pages in course: {course.name}")
+                await notificationCh.send(embed=embed)
+            if len(pagesDeleted) > 0:
+                embed = nextcord.Embed(title="Page list:", color=config.PAGE_EMBED_COLOR, description=pagesDeleted)
+                embed.set_author(name=f"Pages deleted in course: {course.name}", url=course.URL)
+                dc_print(f"Sending deleted pages in course: {course.name}")
+                await notificationCh.send(embed=embed)
+
+            if len(workshopsAdded) > 0:
+                embed = nextcord.Embed(title="Workshop list:", color=config.WORKSHOP_EMBED_COLOR, description=workshopsAdded)
+                embed.set_author(name=f"New workshops in course: {course.name}", url=course.URL)
+                dc_print(f"Sending new workshops in course {course.name}")
+                await notificationCh.send(embed=embed)
+            if len(workshopsChanged) > 0:
+                embed = nextcord.Embed(title="Workshop list:", color=config.WORKSHOP_EMBED_COLOR, description=workshopsChanged)
+                embed.set_author(name=f"Workshops changed in course: {course.name}", url=course.URL)
+                dc_print(f"Sending changed workshops in course: {course.name}")
+                await notificationCh.send(embed=embed)
+            if len(workshopsDeleted) > 0:
+                embed = nextcord.Embed(title="Workshop list:", color=config.WORKSHOP_EMBED_COLOR, description=workshopsDeleted)
+                embed.set_author(name=f"Workshops deleted in course: {course.name}", url=course.URL)
+                dc_print(f"Sending deleted workshops in course: {course.name}")
+                await notificationCh.send(embed=embed)
+
+            if len(forumsDeleted) > 0:
+                embed = nextcord.Embed(title="Forum list:", color=config.FORUM_EMBED_COLOR, description=forumsDeleted)
+                embed.set_author(name=f"Forums deleted in course: {course.name}", url=course.URL)
+                dc_print(f"Sending deleted forums in course: {course.name}")
+                await notificationCh.send(embed=embed)
+
+            if len(discussionsChanged) > 0 and len(discussionsChanged) < 4096:
+                embed = nextcord.Embed(title="Discussion list:", color=config.DISCUSSION_EMBED_COLOR, description=discussionsChanged)
+                embed.set_author(name=f"Discussions changed in course: {course.name}", url=course.URL)
+                dc_print(f"Sending changed discussions in course: {course.name}")
+                await notificationCh.send(embed=embed)
+            elif len(discussionsChanged) > 4096:
+                await messageSplitter(notificationCh, discussionsChanged, 5, "Discussions", course, "CHANGED", config.DISCUSSION_EMBED_COLOR)
+
+            if len(discussionsDeleted) > 0 and len(discussionsDeleted) < 4096:
+                embed = nextcord.Embed(title="Discussion list:", color=config.DISCUSSION_EMBED_COLOR, description=discussionsDeleted)
+                embed.set_author(name=f"Discussions deleted in course: {course.name}", url=course.URL)
+                dc_print(f"Sending deleted workshops in course: {course.name}")
+                await notificationCh.send(embed=embed)
+            elif len(discussionsDeleted) > 4096:
+                await messageSplitter(notificationCh, discussionsDeleted, 5, "Discussions", course, "DELETED", config.DISCUSSION_EMBED_COLOR)
+
+            if len(attachmentsAdded) > 0 and len(attachmentsAdded) < 4096:
+                embed = nextcord.Embed(title="Attachment list:", color=config.ATTACHMENT_EMBED_COLOR, description=attachmentsAdded)
+                embed.set_author(name=f"New attachments in course: {course.name}", url=course.URL)
+                dc_print(f"Sending new attachments in course {course.name}")
+                await notificationCh.send(embed=embed)
+            elif len(attachmentsAdded) > 4096:
+                await messageSplitter(notificationCh, attachmentsAdded, 5, "Attachments",course, "NEW", config.ATTACHMENT_EMBED_COLOR)
+
+            if len(attachmentsChanged) > 0 and len(attachmentsChanged) < 4096:
+                embed = nextcord.Embed(title="Attachment list:", color=config.ATTACHMENT_EMBED_COLOR, description=attachmentsChanged)
+                embed.set_author(name=f"Attachments changed in course: {course.name}", url=course.URL)
+                dc_print(f"Sending changed attachments in course: {course.name}")
+                await notificationCh.send(embed=embed)
+            elif len(attachmentsChanged) > 4096:
+                await messageSplitter(notificationCh, attachmentsChanged, 5, "Attachments",course, "CHANGED", config.ATTACHMENT_EMBED_COLOR)
+
+            if len(attachmentsDeleted) > 0 and len(attachmentsDeleted) < 4096:
+                embed = nextcord.Embed(title="Attachment list:", color=config.ATTACHMENT_EMBED_COLOR, description=attachmentsDeleted)
+                embed.set_author(name=f"Attachments deleted in course: {course.name}", url=course.URL)
+                dc_print(f"Sending deleted attachments in course: {course.name}")
+                await notificationCh.send(embed=embed)
+            elif len(attachmentsDeleted) > 4096:
+                await messageSplitter(notificationCh, attachmentsDeleted, 5, "Attachments",course, "DELETED", config.ATTACHMENT_EMBED_COLOR)
+
+    FIRST_RUN = False
     connector.commit()
     connector.close()
     mdl_print("Refresh finished!")

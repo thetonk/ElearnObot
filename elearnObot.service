@@ -1,0 +1,18 @@
+[Unit]
+After=network-online.target
+AssertPathIsDirectory=/media/sbaltsas/DATA/sbalt/GithubUploads/ElearnOBot
+Description=ElearnOBot service file
+
+[Service]
+#Change working directory,paths and user according to your case.
+User=sbaltsas
+WorkingDirectory=/media/sbaltsas/DATA/sbalt/GithubUploads/ElearnOBot
+Type=simple
+Restart=always
+ExecStart=/usr/bin/python3 -u /media/sbaltsas/DATA/sbalt/GithubUploads/ElearnOBot/bot.py
+#Change it to your desired log path.
+StandardOutput=file:/var/log/elearnobot/out.log
+StandardError=file:/var/log/elearnobot/error.log
+
+[Install]
+WantedBy=multi-user.target
