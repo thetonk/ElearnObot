@@ -211,6 +211,10 @@ async def check():
         WHERE Filename=? AND courseID=? AND moduleID=? AND Path=? AND DiscussionID IS NULL'''
     filesDeleteQuery = "DELETE FROM Files WHERE CourseID = ? AND URL = ? AND discussionID IS NULL"
 
+    linksCheckQuery = "SELECT TimeModified,URL FROM Files WHERE Filename = ? AND courseID=? AND moduleID=? AND Path IS NULL AND discussionID IS NULL"
+    linksUpdateQuery = '''UPDATE Files SET Path=NULL, Size=?, TimeModified=?, Author=?, URL=?, License=?, MD5=?
+        WHERE Filename=? AND courseID=? AND moduleID=? AND Path IS NULL AND DiscussionID IS NULL'''
+
     filesCheckDiscussionQuery = "SELECT TimeModified,URL FROM Files WHERE Filename = ? AND courseID=? AND Path=? AND discussionID=? AND moduleID IS NULL"
     filesUpdateDiscussionQuery = '''UPDATE Files SET Path=?, Size=?, TimeModified=?, Author=?, URL=?, License=?, MD5=?
     WHERE Filename=? AND courseID=? AND DiscussionID=? AND Path=? AND moduleID IS NULL'''
@@ -251,6 +255,9 @@ async def check():
         filesAdded = ""
         filesChanged = ""
         filesDeleted = ""
+        linksAdded = ""
+        linksChanged = ""
+        linksDeleted = ""
         quizzesAdded = ""
         quizzesChanged = ""
         quizzesDeleted = ""
@@ -274,34 +281,64 @@ async def check():
             course.ID, course.name, course.summary,
         ))
         for file in course.files:
-            data = cursor.execute(filesCheckQuery, (file.filename, course.ID, file.moduleID, file.path)).fetchone()
-            if data != None:
-                if data[0] != file.timeModified:
-                    mdl_print(f"File {file.filename} got updated! URL: {file.URL}")
-                    cursor.execute(filesUpdateQuery, (
-                            file.path, file.size, file.timeModified,
-                            file.author, file.URL, file.License, "",file.filename, course.ID, file.moduleID, file.path)
-                        )
-                    filesChanged += f"~ [{file.filename}]({file.URL.replace('webservice/', '')}) ({filesizeConversion(file.size)})\n"
-            else:
-                mdl_print(f"New file! URL: {file.URL}")
-                query = '''INSERT OR IGNORE INTO Files(courseID, Filename, Path, Size, TimeModified, MimeType, Author, URL, License, MD5, moduleID) 
-                            VALUES (?,?,?,?,?,?,?,?,?,?,?)
-                        '''
-                cursor.execute(query,(
-                        (course.ID, file.filename, file.path, file.size, file.timeModified, file.mimeType, file.author, file.URL, file.License,
-                            "", file.moduleID)
-                    ))
-                filesAdded += f"+ [{file.filename}]({file.URL.replace('webservice/', '')}) ({filesizeConversion(file.size)}) by *{file.author}*\n"
+            if file.path != None:
+                data = cursor.execute(filesCheckQuery, (file.filename, course.ID, file.moduleID, file.path)).fetchone()
+                if data != None:
+                    if data[0] != file.timeModified:
+                        mdl_print(f"File {file.filename} got updated! URL: {file.URL}")
+                        cursor.execute(filesUpdateQuery, (
+                                file.path, file.size, file.timeModified,
+                                file.author, file.URL, file.License, "",file.filename, course.ID, file.moduleID, file.path)
+                            )
+                        filesChanged += f"~ [{file.filename}]({file.URL.replace('webservice/', '')}) ({filesizeConversion(file.size)})\n"
+                else:
+                    mdl_print(f"New file! URL: {file.URL}")
+                    query = '''INSERT OR IGNORE INTO Files(courseID, Filename, Path, Size, TimeModified, MimeType, Author, URL, License, MD5, moduleID) 
+                                VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                            '''
+                    cursor.execute(query,(
+                            (course.ID, file.filename, file.path, file.size, file.timeModified, file.mimeType, file.author, file.URL, file.License,
+                                "", file.moduleID)
+                        ))
+                    filesAdded += f"+ [{file.filename}]({file.URL.replace('webservice/', '')}) ({filesizeConversion(file.size)}) by *{file.author}*\n"
+            else: # if file.path is None, it's a link
+                data = cursor.execute(linksCheckQuery, (file.filename, course.ID, file.moduleID, file.path)).fetchone()
+                if data != None:
+                    if data[0] != file.timeModified:
+                        mdl_print(f"Link {file.filename} got updated! URL: {file.URL}")
+                        cursor.execute(linksUpdateQuery, (
+                                file.size, file.timeModified,
+                                file.author, file.URL, file.License, "",file.filename, course.ID, file.moduleID)
+                            )
+                        linksChanged += f"~ [{file.filename}]({file.URL.replace('webservice/', '')})\n"
+                else:
+                    mdl_print(f"New link! URL: {file.URL}")
+                    query = '''INSERT OR IGNORE INTO Files(courseID, Filename, Path, Size, TimeModified, MimeType, Author, URL, License, MD5, moduleID) 
+                                VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                            '''
+                    cursor.execute(query,(
+                            (course.ID, file.filename, file.path, file.size, file.timeModified, file.mimeType, file.author, file.URL, file.License,
+                                "", file.moduleID)
+                        ))
+                    linksAdded += f"+ [{file.filename}]({file.URL.replace('webservice/', '')})\n"
         # check for deletion (URL-based)
-        for localFile in cursor.execute("SELECT URL, Filename, Size FROM Files WHERE courseID=? AND discussionID IS NULL", (course.ID,)).fetchall():
-            courseFileURLs = []
-            for file in course.files:
-                courseFileURLs.append(file.URL)
-            if localFile[0] not in courseFileURLs:
-                mdl_print(f"File {localFile[1]} deleted!")
-                cursor.execute(filesDeleteQuery, (course.ID, localFile[0]))
-                filesDeleted += f"- ~~{localFile[1]}~~ ({filesizeConversion(localFile[2])})\n"
+        for localFile in cursor.execute("SELECT URL, Filename, Size, Path FROM Files WHERE courseID=? AND discussionID IS NULL", (course.ID,)).fetchall():
+            if localFile[3] != None:
+                courseFileURLs = []
+                for file in course.files:
+                    courseFileURLs.append(file.URL)
+                if localFile[0] not in courseFileURLs:
+                    mdl_print(f"File {localFile[1]} deleted!")
+                    cursor.execute(filesDeleteQuery, (course.ID, localFile[0]))
+                    filesDeleted += f"- ~~{localFile[1]}~~ ({filesizeConversion(localFile[2])})\n"
+            else: # if None it's a link
+                courseFileURLs = []
+                for file in course.files:
+                    courseFileURLs.append(file.URL)
+                if localFile[0] not in courseFileURLs:
+                    mdl_print(f"Link {localFile[1]} deleted!")
+                    cursor.execute(filesDeleteQuery, (course.ID, localFile[0]))
+                    linksDeleted += f"- ~~{localFile[1]}~~\n"
         
         for quiz in course.quizzes:
             data = cursor.execute(QuizzesAndWorkshopsCheckQuery.format("Quizzes"), (quiz.ID,)).fetchone()
@@ -451,7 +488,7 @@ async def check():
                     if not FIRST_RUN:
                         discussionEmbed = nextcord.Embed(title=discussion.name, url=discussion.URL, color=config.DISCUSSION_EMBED_COLOR, description=discussion.message)
                         if len(discussion.message) > 4096:
-                            await messageSplitter(notificationCh, discussion.message, 5, "Discussion", course, "NEW", config.DISCUSSION_EMBED_COLOR)
+                            await messageSplitter(notificationCh, discussion.message, config.DISCUSSION_LINES_PER_EMBED, "Discussion", course, "NEW", config.DISCUSSION_EMBED_COLOR)
 
                         elif len(discussion.message) > 0 and len(discussion.message) < 4096:
                             discussionEmbed.set_author(name=f"New discussion in forum \'{forum.name}\' of course {course.name}", url=forum.URL)
@@ -477,7 +514,7 @@ async def check():
                                 "", discussion.ID)
                             ))
 
-                        attachmentsAdded += f"+ [{attachment.filename}]({attachment.URL.replace('webservice/', '')}) ({filesizeConversion(attachment.size)}) by {attachment.author} in discussion [{discussion.name}]({discussion.URL})\n"
+                        attachmentsAdded += f"+ [{attachment.filename}]({attachment.URL.replace('webservice/', '')}) ({filesizeConversion(attachment.size)}) by *{attachment.author}* in discussion [{discussion.name}]({discussion.URL})\n"
                 #check attachment deletion (by URL)
                 for localAttachment in cursor.execute("SELECT URL, Filename FROM Files WHERE courseID=? AND discussionID=?", (course.ID, discussion.ID)).fetchall():
                     discussionFileURLs = []
@@ -516,7 +553,7 @@ async def check():
                 dc_print(f"Sending new files in course {course.name}")
                 await notificationCh.send(embed=embed)
             elif len(filesAdded) > 4096:
-                await messageSplitter(notificationCh, filesAdded,5,"File",course, "NEW", config.FILE_EMBED_COLOR)
+                await messageSplitter(notificationCh, filesAdded, config.FILES_PER_EMBED, "File", course, "NEW", config.FILE_EMBED_COLOR)
 
             if len(filesChanged) > 0 and len(filesChanged) < 4096:
                 embed = nextcord.Embed(title="File list:", color=config.FILE_EMBED_COLOR, description=filesChanged)
@@ -524,7 +561,7 @@ async def check():
                 dc_print(f"Sending changed files in course: {course.name}")
                 await notificationCh.send(embed=embed)
             elif len(filesChanged) > 4096:
-                await messageSplitter(notificationCh, filesChanged,5,"File",course, "CHANGED", config.FILE_EMBED_COLOR)
+                await messageSplitter(notificationCh, filesChanged, config.FILES_PER_EMBED, "File", course, "CHANGED", config.FILE_EMBED_COLOR)
 
             if len(filesDeleted) > 0 and len(filesDeleted) < 4096:
                 embed = nextcord.Embed(title="File list:", color=config.FILE_EMBED_COLOR, description=filesDeleted)
@@ -532,7 +569,31 @@ async def check():
                 dc_print(f"Sending deleted files in course: {course.name}")
                 await notificationCh.send(embed=embed)
             elif len(filesDeleted) > 4096:
-                await messageSplitter(notificationCh, filesDeleted, 5,"File",course, "DELETED", config.FILE_EMBED_COLOR)
+                await messageSplitter(notificationCh, filesDeleted, config.FILES_PER_EMBED, "File", course, "DELETED", config.FILE_EMBED_COLOR)
+
+            if len(linksAdded) > 0 and len(filesAdded) < 4096:
+                embed = nextcord.Embed(title="Link list:", color=config.LINK_EMBED_COLOR, description=filesAdded)
+                embed.set_author(name=f"New links in course: {course.name}", url=course.URL)
+                dc_print(f"Sending new links in course {course.name}")
+                await notificationCh.send(embed=embed)
+            elif len(filesAdded) > 4096:
+                await messageSplitter(notificationCh, linksAdded, config.LINKS_PER_EMBED, "Link", course, "NEW", config.LINK_EMBED_COLOR)
+
+            if len(linksChanged) > 0 and len(filesChanged) < 4096:
+                embed = nextcord.Embed(title="Link list:", color=config.LINK_EMBED_COLOR, description=filesChanged)
+                embed.set_author(name=f"Links changed in course: {course.name}", url=course.URL)
+                dc_print(f"Sending changed links in course: {course.name}")
+                await notificationCh.send(embed=embed)
+            elif len(filesChanged) > 4096:
+                await messageSplitter(notificationCh, linksChanged, config.LINKS_PER_EMBED, "Link", course, "CHANGED", config.LINK_EMBED_COLOR)
+
+            if len(linksDeleted) > 0 and len(filesDeleted) < 4096:
+                embed = nextcord.Embed(title="Link list:", color=config.LINK_EMBED_COLOR, description=filesDeleted)
+                embed.set_author(name=f"Links deleted in course: {course.name}", url=course.URL)
+                dc_print(f"Sending deleted links in course: {course.name}")
+                await notificationCh.send(embed=embed)
+            elif len(filesDeleted) > 4096:
+                await messageSplitter(notificationCh, linksDeleted, config.LINKS_PER_EMBED, "Link", course, "DELETED", config.LINK_EMBED_COLOR)
 
             if len(quizzesAdded) > 0:
                 embed = nextcord.Embed(title="Quiz list:", color=config.QUIZ_EMBED_COLOR, description=quizzesAdded)
@@ -610,7 +671,7 @@ async def check():
                 dc_print(f"Sending changed discussions in course: {course.name}")
                 await notificationCh.send(embed=embed)
             elif len(discussionsChanged) > 4096:
-                await messageSplitter(notificationCh, discussionsChanged, 5, "Discussions", course, "CHANGED", config.DISCUSSION_EMBED_COLOR)
+                await messageSplitter(notificationCh, discussionsChanged, config.DISCUSSIONS_PER_EMBED, "Discussions", course, "CHANGED", config.DISCUSSION_EMBED_COLOR)
 
             if len(discussionsDeleted) > 0 and len(discussionsDeleted) < 4096:
                 embed = nextcord.Embed(title="Discussion list:", color=config.DISCUSSION_EMBED_COLOR, description=discussionsDeleted)
@@ -618,7 +679,7 @@ async def check():
                 dc_print(f"Sending deleted workshops in course: {course.name}")
                 await notificationCh.send(embed=embed)
             elif len(discussionsDeleted) > 4096:
-                await messageSplitter(notificationCh, discussionsDeleted, 5, "Discussions", course, "DELETED", config.DISCUSSION_EMBED_COLOR)
+                await messageSplitter(notificationCh, discussionsDeleted, config.DISCUSSIONS_PER_EMBED, "Discussions", course, "DELETED", config.DISCUSSION_EMBED_COLOR)
 
             if len(attachmentsAdded) > 0 and len(attachmentsAdded) < 4096:
                 embed = nextcord.Embed(title="Attachment list:", color=config.ATTACHMENT_EMBED_COLOR, description=attachmentsAdded)
@@ -626,7 +687,7 @@ async def check():
                 dc_print(f"Sending new attachments in course {course.name}")
                 await notificationCh.send(embed=embed)
             elif len(attachmentsAdded) > 4096:
-                await messageSplitter(notificationCh, attachmentsAdded, 5, "Attachments",course, "NEW", config.ATTACHMENT_EMBED_COLOR)
+                await messageSplitter(notificationCh, attachmentsAdded, config.ATTACHMENTS_PER_EMBED, "Attachments", course, "NEW", config.ATTACHMENT_EMBED_COLOR)
 
             if len(attachmentsChanged) > 0 and len(attachmentsChanged) < 4096:
                 embed = nextcord.Embed(title="Attachment list:", color=config.ATTACHMENT_EMBED_COLOR, description=attachmentsChanged)
@@ -634,7 +695,7 @@ async def check():
                 dc_print(f"Sending changed attachments in course: {course.name}")
                 await notificationCh.send(embed=embed)
             elif len(attachmentsChanged) > 4096:
-                await messageSplitter(notificationCh, attachmentsChanged, 5, "Attachments",course, "CHANGED", config.ATTACHMENT_EMBED_COLOR)
+                await messageSplitter(notificationCh, attachmentsChanged, config.ATTACHMENTS_PER_EMBED, "Attachments", course, "CHANGED", config.ATTACHMENT_EMBED_COLOR)
 
             if len(attachmentsDeleted) > 0 and len(attachmentsDeleted) < 4096:
                 embed = nextcord.Embed(title="Attachment list:", color=config.ATTACHMENT_EMBED_COLOR, description=attachmentsDeleted)
@@ -642,7 +703,7 @@ async def check():
                 dc_print(f"Sending deleted attachments in course: {course.name}")
                 await notificationCh.send(embed=embed)
             elif len(attachmentsDeleted) > 4096:
-                await messageSplitter(notificationCh, attachmentsDeleted, 5, "Attachments",course, "DELETED", config.ATTACHMENT_EMBED_COLOR)
+                await messageSplitter(notificationCh, attachmentsDeleted, config.ATTACHMENTS_PER_EMBED, "Attachments", course, "DELETED", config.ATTACHMENT_EMBED_COLOR)
 
     FIRST_RUN = False
     connector.commit()
