@@ -302,7 +302,7 @@ async def check():
                         ))
                     filesAdded += f"+ [{file.filename}]({file.URL.replace('webservice/', '')}) ({filesizeConversion(file.size)}) by *{file.author}*\n"
             else: # if file.path is None, it's a link
-                data = cursor.execute(linksCheckQuery, (file.filename, course.ID, file.moduleID, file.path)).fetchone()
+                data = cursor.execute(linksCheckQuery, (file.filename, course.ID, file.moduleID)).fetchone()
                 if data != None:
                     if data[0] != file.timeModified:
                         mdl_print(f"Link {file.filename} got updated! URL: {file.URL}")
@@ -571,24 +571,24 @@ async def check():
             elif len(filesDeleted) > 4096:
                 await messageSplitter(notificationCh, filesDeleted, config.FILES_PER_EMBED, "File", course, "DELETED", config.FILE_EMBED_COLOR)
 
-            if len(linksAdded) > 0 and len(filesAdded) < 4096:
-                embed = nextcord.Embed(title="Link list:", color=config.LINK_EMBED_COLOR, description=filesAdded)
+            if len(linksAdded) > 0 and len(linksAdded) < 4096:
+                embed = nextcord.Embed(title="Link list:", color=config.LINK_EMBED_COLOR, description=linksAdded)
                 embed.set_author(name=f"New links in course: {course.name}", url=course.URL)
                 dc_print(f"Sending new links in course {course.name}")
                 await notificationCh.send(embed=embed)
             elif len(filesAdded) > 4096:
                 await messageSplitter(notificationCh, linksAdded, config.LINKS_PER_EMBED, "Link", course, "NEW", config.LINK_EMBED_COLOR)
 
-            if len(linksChanged) > 0 and len(filesChanged) < 4096:
-                embed = nextcord.Embed(title="Link list:", color=config.LINK_EMBED_COLOR, description=filesChanged)
+            if len(linksChanged) > 0 and len(linksChanged) < 4096:
+                embed = nextcord.Embed(title="Link list:", color=config.LINK_EMBED_COLOR, description=linksChanged)
                 embed.set_author(name=f"Links changed in course: {course.name}", url=course.URL)
                 dc_print(f"Sending changed links in course: {course.name}")
                 await notificationCh.send(embed=embed)
             elif len(filesChanged) > 4096:
                 await messageSplitter(notificationCh, linksChanged, config.LINKS_PER_EMBED, "Link", course, "CHANGED", config.LINK_EMBED_COLOR)
 
-            if len(linksDeleted) > 0 and len(filesDeleted) < 4096:
-                embed = nextcord.Embed(title="Link list:", color=config.LINK_EMBED_COLOR, description=filesDeleted)
+            if len(linksDeleted) > 0 and len(linksDeleted) < 4096:
+                embed = nextcord.Embed(title="Link list:", color=config.LINK_EMBED_COLOR, description=linksDeleted)
                 embed.set_author(name=f"Links deleted in course: {course.name}", url=course.URL)
                 dc_print(f"Sending deleted links in course: {course.name}")
                 await notificationCh.send(embed=embed)
