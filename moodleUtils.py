@@ -1,5 +1,6 @@
 import requests, config
 from bs4 import BeautifulSoup
+from os import makedirs, path
 
 class moodleInterface():
 
@@ -59,6 +60,27 @@ class File:
         self.timeModified = timeModified
         self.License = License
         self.moduleID = moduleID
+    
+    def download(self, downloadPath):
+        dest = path.join(downloadPath, self.path[1:])
+        if not path.exists(dest):
+            makedirs(dest)
+        r = requests.get(f"{self.URL}&token={config.API_TOKEN}").content
+        if path.exists(path.join(dest, self.filename)):
+            count = 1
+            while True:
+                if not path.exists(path.join(dest, self.filename.replace(".", f"({count})."))):
+                    with open(path.join(dest, self.filename.replace(".", f"({count}).")), "wb") as f:
+                        f.write(r)
+                        f.flush()
+                        f.close()
+                    break
+                count += 1
+        else:
+            with open(path.join(dest, self.filename), "wb") as f:
+                f.write(r)
+                f.flush()
+                f.close()            
 
 class Discussion:
     def __init__(self,*, name, discussionID, forumID, message, timeModified,files):

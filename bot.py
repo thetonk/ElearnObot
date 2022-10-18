@@ -2,6 +2,7 @@ import nextcord, config, sqlite3, math
 from random import randint
 from time import time
 from datetime import datetime
+from os import path
 from asyncio import sleep
 from nextcord.ext import commands, tasks
 from nextcord.ui import Select, Button, button, View
@@ -291,6 +292,9 @@ async def check():
                                 file.author, file.URL, file.License, "",file.filename, course.ID, file.moduleID, file.path)
                             )
                         filesChanged += f"~ [{file.filename}]({file.URL.replace('webservice/', '')}) ({filesizeConversion(file.size)})\n"
+                        if config.DOWNLOAD_FILES:
+                            dl_print(f"Downloading changed file {file.filename}, {file.size} bytes!")
+                            file.download(path.join(config.DOWNLOAD_DIR, course.name))
                 else:
                     mdl_print(f"New file! URL: {file.URL}")
                     query = '''INSERT OR IGNORE INTO Files(courseID, Filename, Path, Size, TimeModified, MimeType, Author, URL, License, MD5, moduleID) 
@@ -301,6 +305,9 @@ async def check():
                                 "", file.moduleID)
                         ))
                     filesAdded += f"+ [{file.filename}]({file.URL.replace('webservice/', '')}) ({filesizeConversion(file.size)}) by *{file.author}*\n"
+                    if config.DOWNLOAD_FILES:
+                        dl_print(f"Downloading new file {file.filename}, {file.size} bytes!")
+                        file.download(path.join(config.DOWNLOAD_DIR, course.name))
             else: # if file.path is None, it's a link
                 data = cursor.execute(linksCheckQuery, (file.filename, course.ID, file.moduleID)).fetchone()
                 if data != None:
@@ -715,5 +722,8 @@ def mdl_print(text):
 
 def dc_print(text):
     print(f"{str(datetime.now())} - [DISCORD] {text}")
+
+def dl_print(text):
+    print(f"{str(datetime.now())} - [DLOADER] {text}")
 
 client.run(config.BOT_TOKEN)
