@@ -1,8 +1,9 @@
 import nextcord, config, sqlite3, math
+from json import dumps
 from random import randint
 from time import time
 from datetime import datetime
-from os import path
+from os import path,makedirs
 from asyncio import sleep
 from nextcord.ext import commands, tasks
 from nextcord.ui import Select, Button, button, View
@@ -14,6 +15,29 @@ def filesizeConversion(bytes):
         out = out/1024.0
         return "{}MB".format(round(out, 2))
     return "{}KB".format(round(out, 2))
+
+async def messageSplitter(channel, message: str, itemsCountPerMessage: int, itemType: str, course: Course, itemState: str, embedColor: int):
+    items = message.split("\n")
+    del items[len(items) - 1] #delete last empty item, since it's useless
+    totalMessages = math.ceil(len(items) / float(itemsCountPerMessage))
+    for m in range(totalMessages):
+        messages = ""
+        for message in items[:itemsCountPerMessage]:
+            messages += message+"\n"
+        embed = nextcord.Embed(title=f"{itemType} list: {m+1}/{totalMessages}", color=embedColor, description=messages)
+        embed.set_author(name=f"{itemState} {itemType}s in course: {course.name}", url=course.URL)
+        dc_print(f"Sending {itemState} {itemType} in course {course.name} by parts (too many characters for single message!). Progress: {m+1}/{totalMessages}")
+        await channel.send(embed=embed)
+        del items[:itemsCountPerMessage]
+
+def saveAPIResponse(*,jsonResponse, savePath, course):
+    savePath = path.join(savePath,course)
+    filename = f"{round(datetime.timestamp(datetime.now()))}.json"
+    print(filename)
+    if not path.exists(path.join(savePath)):
+        makedirs(savePath)
+    with open(path.join(savePath,filename), "w") as out:
+        out.write(dumps(jsonResponse, indent=5, sort_keys=True))
 
 client = commands.Bot(intents=nextcord.Intents.default())
 #client.remove_command("help")
@@ -153,20 +177,6 @@ class discussionsView(View):
         else:
             return
 
-async def messageSplitter(channel, message: str, itemsCountPerMessage: int, itemType: str, course: Course, itemState: str, embedColor: int):
-    items = message.split("\n")
-    del items[len(items) - 1] #delete last empty item, since it's useless
-    totalMessages = math.ceil(len(items) / float(itemsCountPerMessage))
-    for m in range(totalMessages):
-        messages = ""
-        for message in items[:itemsCountPerMessage]:
-            messages += message+"\n"
-        embed = nextcord.Embed(title=f"{itemType} list: {m+1}/{totalMessages}", color=embedColor, description=messages)
-        embed.set_author(name=f"{itemState} {itemType}s in course: {course.name}", url=course.URL)
-        dc_print(f"Sending {itemState} {itemType} in course {course.name} by parts (too many characters for single message!). Progress: {m+1}/{totalMessages}")
-        await channel.send(embed=embed)
-        del items[:itemsCountPerMessage]
-
 
 @client.event
 async def on_ready():
@@ -187,16 +197,17 @@ async def discussionMenu(interaction):
 @tasks.loop(minutes=config.UPDATE_MINUTES)
 #sample function for updating database
 async def check():
-    #sleepAmount = randint(0,60)*60
-    #if sleepAmount > 0:
-        #await sleep(sleepAmount)
+    sleepAmount = randint(0,60)*60
+    if sleepAmount > 0:
+        await sleep(sleepAmount)
     #print("Initializing refresh...")
     courses= []
     moodle = moodleInterface()
     notificationCh = client.get_channel(config.NOTIFICATION_CHANNEL)
     dc_print(f"Got notification channel #{notificationCh.name}")
     mdl_print("Refreshing courses")
-    for course in moodle.getCourses():
+    getCoursesAPIResponse = moodle.getCourses() #we will need this later for debugging ;)
+    for course in getCoursesAPIResponse:
         id = course["id"]
         c = Course(
             fullName=course["fullname"],
@@ -529,7 +540,7 @@ async def check():
                         discussionFileURLs.append(attachment.URL)
                     if localAttachment[0] not in discussionFileURLs:
                         mdl_print(f"Attachment {localAttachment[1]} from discussion {discussion.name} deleted!")
-                        cursor.execute(filesDeleteDiscussionsQuery, (localAttachment[0], discussion.ID))
+                        cursor.execute(filesDeleteDiscussionQuery, (localAttachment[0], discussion.ID))
                         attachmentsDeleted += f"- ~~{localAttachment[1]}~~ in discussion [{discussion.name}]({discussion.URL})\n"
 
             for localDiscussion in cursor.execute("SELECT ID, Name FROM Discussions WHERE forumID=?", (forum.ID,)).fetchall():
@@ -575,8 +586,10 @@ async def check():
                 embed.set_author(name=f"Files deleted in course: {course.name}", url=course.URL)
                 dc_print(f"Sending deleted files in course: {course.name}")
                 await notificationCh.send(embed=embed)
+                saveAPIResponse(jsonResponse=getCoursesAPIResponse, savePath=path.join(config.DOWNLOAD_DIR,"API_RESPONSES"), course=course.name)
             elif len(filesDeleted) > 4096:
                 await messageSplitter(notificationCh, filesDeleted, config.FILES_PER_EMBED, "File", course, "DELETED", config.FILE_EMBED_COLOR)
+                saveAPIResponse(jsonResponse=getCoursesAPIResponse, savePath=path.join(config.DOWNLOAD_DIR,"API_RESPONSES"), course=course.name)
 
             if len(linksAdded) > 0 and len(linksAdded) < 4096:
                 embed = nextcord.Embed(title="Link list:", color=config.LINK_EMBED_COLOR, description=linksAdded)
