@@ -1,6 +1,6 @@
 Class File:
-	Fields:
-		Filename: string
+  Fields:
+    Filename: string
 		Path: String
 		Size: int
 		TimeModified: long
