@@ -1,5 +1,5 @@
 FROM python:3.9-slim-bullseye
-WORKDIR /elearObot
+WORKDIR /elearnObot
 LABEL Maintainer="Spyros"
 LABEL Version="1.1"
 COPY . .
