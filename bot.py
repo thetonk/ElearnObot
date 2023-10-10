@@ -1,7 +1,7 @@
 import nextcord, config, sqlite3, math
 from json import dumps
 from random import randint
-from time import time
+#from time import time
 from datetime import datetime
 from os import path,makedirs
 from asyncio import sleep

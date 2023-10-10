@@ -3,3 +3,5 @@ LICENSE
 README.md
 elearnObot.service
 .git/
+.gitignore
+Outlines-Schemas/
