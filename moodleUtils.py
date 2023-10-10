@@ -231,7 +231,7 @@ class Course:
                         description=soup.get_text()
                     ))
 
-                if "contents" in module and moduleType != "Pages":
+                if "contents" in module and moduleType != "Pages" and moduleType != "Books":
                     files = module["contents"]
                     for file in files:
                         #print("FILENAME "+file["filename"])

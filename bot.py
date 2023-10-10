@@ -293,7 +293,7 @@ async def check():
             course.ID, course.name, course.summary,
         ))
         for file in course.files:
-            if file.path != None:
+            if file.path != None and file.URL != None: #if path exists but url is None (probably) is a book
                 data = cursor.execute(filesCheckQuery, (file.filename, course.ID, file.moduleID, file.path)).fetchone()
                 if data != None:
                     if data[0] != file.timeModified:
@@ -319,7 +319,7 @@ async def check():
                     if config.DOWNLOAD_FILES:
                         dl_print(f"Downloading new file {file.filename}, {file.size} bytes!")
                         file.download(path.join(config.DOWNLOAD_DIR, course.name))
-            else: # if file.path is None, it's a link
+            elif file.path == None and file.URL != None: # if file.path is None, it's a link
                 data = cursor.execute(linksCheckQuery, (file.filename, course.ID, file.moduleID)).fetchone()
                 if data != None:
                     if data[0] != file.timeModified:
