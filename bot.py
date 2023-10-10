@@ -586,10 +586,10 @@ async def check():
                 embed.set_author(name=f"Files deleted in course: {course.name}", url=course.URL)
                 dc_print(f"Sending deleted files in course: {course.name}")
                 await notificationCh.send(embed=embed)
-                saveAPIResponse(jsonResponse=moodle.getCourseData(course.ID), savePath=path.join(config.DOWNLOAD_DIR,"API_RESPONSES"), course=course.name)
+                saveAPIResponse(jsonResponse=moodle.getCourseData(courseID=course.ID), savePath=path.join(config.DOWNLOAD_DIR,"API_RESPONSES"), course=course.name)
             elif len(filesDeleted) > 4096:
                 await messageSplitter(notificationCh, filesDeleted, config.FILES_PER_EMBED, "File", course, "DELETED", config.FILE_EMBED_COLOR)
-                saveAPIResponse(jsonResponse=moodle.getCourseData(course.ID), savePath=path.join(config.DOWNLOAD_DIR,"API_RESPONSES"), course=course.name)
+                saveAPIResponse(jsonResponse=moodle.getCourseData(courseID=course.ID), savePath=path.join(config.DOWNLOAD_DIR,"API_RESPONSES"), course=course.name)
 
             if len(linksAdded) > 0 and len(linksAdded) < 4096:
                 embed = nextcord.Embed(title="Link list:", color=config.LINK_EMBED_COLOR, description=linksAdded)
