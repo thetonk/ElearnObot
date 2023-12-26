@@ -197,7 +197,7 @@ async def discussionMenu(interaction):
 @tasks.loop(minutes=config.UPDATE_MINUTES)
 #sample function for updating database
 async def check():
-    sleepAmount = randint(0,60)*60
+    sleepAmount = randint(0,30)*60
     if sleepAmount > 0:
         await sleep(sleepAmount)
     #print("Initializing refresh...")
@@ -207,7 +207,10 @@ async def check():
     dc_print(f"Got notification channel #{notificationCh.name}")
     mdl_print("Refreshing courses")
     getCoursesAPIResponse = moodle.getCourses() #we will need this later for debugging ;)
-    for course in getCoursesAPIResponse:
+    courseIDs = [course["id"] for course in getCoursesAPIResponse]
+    #get all assignment details in a single call
+    coursesAssignmentDetails = moodle.getAssignments(courseIDs=courseIDs)["courses"]
+    for courseIndex,course in enumerate(getCoursesAPIResponse):
         id = course["id"]
         c = Course(
             fullName=course["fullname"],
@@ -217,6 +220,11 @@ async def check():
         mdl_print(f"Now refreshing course {c.name}")
         c.refresh()
         courses.append(c)
+        #update time opened and time modified times for assignments
+        for assignmentIndex,assignment in enumerate(coursesAssignmentDetails[courseIndex]["assignments"]):
+            c.assignments[assignmentIndex].timeOpened = assignment["allowsubmissionsfromdate"]
+            c.assignments[assignmentIndex].timeDue = assignment["duedate"]
+
 
     filesCheckQuery = "SELECT TimeModified,URL FROM Files WHERE Filename = ? AND courseID=? AND moduleID=? AND Path=? AND discussionID IS NULL"
     filesUpdateQuery = '''UPDATE Files SET Path=?, Size=?, TimeModified=?, Author=?, URL=?, License=?, MD5=?
