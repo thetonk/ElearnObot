@@ -9,6 +9,22 @@ from nextcord.ext import commands, tasks
 from nextcord.ui import Select, Button, button, View
 from moodleUtils import *
 
+client = commands.Bot(intents=nextcord.Intents.default())
+#client.remove_command("help")
+
+if not path.exists(config.SQLITE_DB_PATH):
+    print("Creating database and tables...",end=" ")
+    with open("Database/tables.sql", "r") as sql:
+        script = sql.read()
+        connector = sqlite3.connect(config.SQLITE_DB_PATH)
+        cursor = connector.cursor()
+        cursor.executescript(script)
+        connector.commit()
+        connector.close()
+        print("Done!")
+else:
+    print("Database file found! Skipping database and table creation!")
+
 def filesizeConversion(bytes):
     out = int(bytes)/1024.0
     if out > 1024:
@@ -38,9 +54,6 @@ def saveAPIResponse(*,jsonResponse, savePath, course):
         makedirs(savePath)
     with open(path.join(savePath,filename), "w") as out:
         out.write(dumps(jsonResponse, indent=5, sort_keys=True))
-
-client = commands.Bot(intents=nextcord.Intents.default())
-#client.remove_command("help")
 
 class filesView(View):
 

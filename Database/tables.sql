@@ -1,0 +1,116 @@
+-- Courses definition
+
+CREATE TABLE Courses (
+	courseID INTEGER NOT NULL,
+	Fullname TEXT NOT NULL,
+	Summary TEXT NOT NULL,
+	CONSTRAINT Courses_PK PRIMARY KEY (courseID)
+);
+
+
+-- Assignments definition
+
+CREATE TABLE Assignments (
+	ID INTEGER NOT NULL,
+	courseID INTEGER NOT NULL,
+	Name TEXT,
+	URL TEXT,
+	TimeOpened INTEGER NOT NULL,
+	TimeDue INTEGER,
+	CONSTRAINT Assignments_PK PRIMARY KEY (ID),
+	CONSTRAINT Assignments_Courses_FK FOREIGN KEY (courseID) REFERENCES Courses(courseID) ON DELETE CASCADE
+);
+
+
+-- Discussions definition
+
+CREATE TABLE Discussions (
+	ID INTEGER NOT NULL,
+	courseID INTEGER NOT NULL,
+	Name TEXT,
+	URL TEXT,
+	TimeModified INTEGER NOT NULL,
+	Message TEXT NOT NULL,
+	forumID INTEGER,
+	CONSTRAINT Discussions_PK PRIMARY KEY (ID),
+	CONSTRAINT Discussions_Courses_FK FOREIGN KEY (courseID) REFERENCES Courses(courseID) ON DELETE CASCADE
+);
+
+
+-- Files definition
+
+CREATE TABLE Files (
+	ID INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+	courseID INTEGER NOT NULL,
+	Filename TEXT NOT NULL,
+	"Path" TEXT,
+	"Size" INTEGER NOT NULL,
+	TimeModified INTEGER NOT NULL,
+	MimeType TEXT,
+	Author TEXT,
+	URL TEXT NOT NULL,
+	License TEXT,
+	MD5 TEXT NOT NULL,
+	DiscussionID INTEGER,
+	moduleID INTEGER,
+	CONSTRAINT Files_Courses_FK FOREIGN KEY (courseID) REFERENCES Courses(courseID) ON DELETE CASCADE
+);
+
+
+-- Forums definition
+
+CREATE TABLE Forums (
+	ID INTEGER NOT NULL,
+	courseID INTEGER NOT NULL,
+	Name TEXT,
+	URL TEXT,
+	CONSTRAINT Forums_PK PRIMARY KEY (ID),
+	CONSTRAINT Forums_Courses_FK FOREIGN KEY (courseID) REFERENCES Courses(courseID) ON DELETE CASCADE
+);
+
+
+-- Labels definition
+
+CREATE TABLE Labels (
+	ID INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+	courseID INTEGER NOT NULL,
+	Description TEXT,
+	CONSTRAINT Labels_Courses_FK FOREIGN KEY (courseID) REFERENCES Courses(courseID) ON DELETE CASCADE
+);
+
+
+-- Pages definition
+
+CREATE TABLE Pages (
+	ID INTEGER NOT NULL,
+	courseID INTEGER NOT NULL,
+	Name TEXT,
+	URL TEXT,
+	Description TEXT,
+	CONSTRAINT Pages_PK PRIMARY KEY (ID),
+	CONSTRAINT Pages_Courses_FK FOREIGN KEY (courseID) REFERENCES Courses(courseID) ON DELETE CASCADE
+);
+
+
+-- Quizzes definition
+
+CREATE TABLE Quizzes (
+	ID INTEGER NOT NULL,
+	courseID INTEGER NOT NULL,
+	Name TEXT NOT NULL,
+	URL TEXT,
+	CONSTRAINT Quizzes_PK PRIMARY KEY (ID),
+	CONSTRAINT Quizzes_Courses_FK FOREIGN KEY (courseID) REFERENCES Courses(courseID) ON DELETE CASCADE
+);
+
+
+-- Workshops definition
+
+CREATE TABLE Workshops (
+	ID INTEGER NOT NULL,
+	courseID INTEGER NOT NULL,
+	Name TEXT,
+	URL TEXT,
+	CONSTRAINT Workshops_PK PRIMARY KEY (ID),
+	CONSTRAINT Workshops_Courses_FK FOREIGN KEY (courseID) REFERENCES Courses(courseID) ON DELETE CASCADE
+);

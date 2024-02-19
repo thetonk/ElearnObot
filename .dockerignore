@@ -5,3 +5,4 @@ elearnObot.service
 .git/
 .gitignore
 Outlines-Schemas/
+*.db
