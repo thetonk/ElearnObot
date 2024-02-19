@@ -13,7 +13,8 @@ client = commands.Bot(intents=nextcord.Intents.default())
 #client.remove_command("help")
 
 if not path.exists(config.SQLITE_DB_PATH):
-    makedirs(config.SQLITE_DB_PATH)
+    parents , f = path.split(config.SQLITE_DB_PATH)
+    makedirs(parents)
     print("Creating database and tables...",end=" ")
     with open("Database/tables.sql", "r") as sql:
         script = sql.read()
