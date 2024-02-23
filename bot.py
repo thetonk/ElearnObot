@@ -286,32 +286,11 @@ async def check():
         mdl_print("Database empty! This is the first run!")
 
     for course in courses:
-        # this is spaghetti (I use these for discord)
-        filesAdded = ""
-        filesChanged = ""
-        filesDeleted = ""
-        linksAdded = ""
-        linksChanged = ""
-        linksDeleted = ""
-        quizzesAdded = ""
-        quizzesChanged = ""
-        quizzesDeleted = ""
-        assignmentsAdded = ""
-        assignmentsChanged = ""
-        assignmentsDeleted = ""
-        pagesAdded = ""
-        pagesChanged = ""
-        pagesDeleted = ""
-        workshopsAdded = ""
-        workshopsChanged = ""
-        workshopsDeleted = ""
-        forumsDeleted = ""
-        discussionsChanged = ""
-        discussionsDeleted = ""
-        attachmentsAdded = ""
-        attachmentsChanged = ""
-        attachmentsDeleted = ""
-
+        # new spaghetti
+        courseItems = ["Files", "Links", "Quizzes", "Assignments", "Pages","Workshops", "Forums", "Discussions", "Attachments"]
+        changeLog = {}
+        for item in courseItems:
+            changeLog[item] = {"NEW": "", "CHANGED": "", "DELETED": ""}
         cursor.execute("INSERT OR IGNORE INTO Courses(courseID, Fullname, Summary) VALUES (?,?,?)",(
             course.ID, course.name, course.summary,
         ))
@@ -325,7 +304,7 @@ async def check():
                                 file.path, file.size, file.timeModified,
                                 file.author, file.URL, file.License, "",file.filename, course.ID, file.moduleID, file.path)
                             )
-                        filesChanged += f"~ [{file.filename}]({file.URL.replace('webservice/', '')}) ({filesizeConversion(file.size)})\n"
+                        changeLog["Files"]["CHANGED"] += f"~ [{file.filename}]({file.URL.replace('webservice/', '')}) ({filesizeConversion(file.size)})\n"
                         if config.DOWNLOAD_FILES:
                             dl_print(f"Downloading changed file {file.filename}, {file.size} bytes!")
                             file.download(path.join(config.DOWNLOAD_DIR, course.name))
@@ -338,7 +317,7 @@ async def check():
                             (course.ID, file.filename, file.path, file.size, file.timeModified, file.mimeType, file.author, file.URL, file.License,
                                 "", file.moduleID)
                         ))
-                    filesAdded += f"+ [{file.filename}]({file.URL.replace('webservice/', '')}) ({filesizeConversion(file.size)}) by *{file.author}*\n"
+                    changeLog["Files"]["NEW"] += f"+ [{file.filename}]({file.URL.replace('webservice/', '')}) ({filesizeConversion(file.size)}) by *{file.author}*\n"
                     if config.DOWNLOAD_FILES:
                         dl_print(f"Downloading new file {file.filename}, {file.size} bytes!")
                         file.download(path.join(config.DOWNLOAD_DIR, course.name))
@@ -351,7 +330,7 @@ async def check():
                                 file.size, file.timeModified,
                                 file.author, file.URL, file.License, "",file.filename, course.ID, file.moduleID)
                             )
-                        linksChanged += f"~ [{file.filename}]({file.URL.replace('webservice/', '')})\n"
+                        changeLog["Links"]["CHANGED"] += f"~ [{file.filename}]({file.URL.replace('webservice/', '')})\n"
                 else:
                     mdl_print(f"New link! URL: {file.URL}")
                     query = '''INSERT OR IGNORE INTO Files(courseID, Filename, Path, Size, TimeModified, MimeType, Author, URL, License, MD5, moduleID) 
@@ -361,7 +340,7 @@ async def check():
                             (course.ID, file.filename, file.path, file.size, file.timeModified, file.mimeType, file.author, file.URL, file.License,
                                 "", file.moduleID)
                         ))
-                    linksAdded += f"+ [{file.filename}]({file.URL.replace('webservice/', '')})\n"
+                    changeLog["Links"]["NEW"] += f"+ [{file.filename}]({file.URL.replace('webservice/', '')})\n"
         # check for deletion (URL-based)
         for localFile in cursor.execute("SELECT URL, Filename, Size, Path FROM Files WHERE courseID=? AND discussionID IS NULL", (course.ID,)).fetchall():
             if localFile[3] != None:
@@ -371,7 +350,7 @@ async def check():
                 if localFile[0] not in courseFileURLs:
                     mdl_print(f"File {localFile[1]} deleted!")
                     cursor.execute(filesDeleteQuery, (course.ID, localFile[0]))
-                    filesDeleted += f"- ~~{localFile[1]}~~ ({filesizeConversion(localFile[2])})\n"
+                    changeLog["Files"]["DELETED"] += f"- ~~{localFile[1]}~~ ({filesizeConversion(localFile[2])})\n"
             else: # if None it's a link
                 courseFileURLs = []
                 for file in course.files:
@@ -379,21 +358,21 @@ async def check():
                 if localFile[0] not in courseFileURLs:
                     mdl_print(f"Link {localFile[1]} deleted!")
                     cursor.execute(filesDeleteQuery, (course.ID, localFile[0]))
-                    linksDeleted += f"- ~~{localFile[1]}~~\n"
-        
+                    changeLog["Links"]["DELETED"] += f"- ~~{localFile[1]}~~\n"
+
         for quiz in course.quizzes:
             data = cursor.execute(QuizzesAndWorkshopsCheckQuery.format("Quizzes"), (quiz.ID,)).fetchone()
             if data != None:
                 if data[0] != quiz.name:
                     mdl_print(f"Quiz name changed! URL: {quiz.URL}")
                     cursor.execute(QuizzesAndWorkshopsUpdateQuery.format("Quizzes"), (quiz.name, quiz.ID,))
-                    quizzesChanged += f"~ ~~{data[0]}~~[{quiz.name}]({quiz.URL})\n"
+                    changeLog["Quizzes"]["CHANGED"] += f"~ ~~{data[0]}~~[{quiz.name}]({quiz.URL})\n"
             else:
                 mdl_print(f"New quiz! URL: {quiz.URL}")
                 cursor.execute("INSERT OR IGNORE INTO Quizzes(ID, courseID, Name, URL) VALUES (?,?,?,?)",(
                     (quiz.ID, course.ID, quiz.name, quiz.URL,)
                 ))
-                quizzesAdded += f"+ [{quiz.name}]({quiz.URL})\n"
+                changeLog["Quizzes"]["NEW"] += f"+ [{quiz.name}]({quiz.URL})\n"
         # check for deletion (Quiz ID)
         for localQuiz in cursor.execute("SELECT ID, Name FROM Quizzes WHERE courseID=?", (course.ID,)).fetchall():
             courseQuizIDs = []
@@ -402,7 +381,7 @@ async def check():
             if localQuiz[0] not in courseQuizIDs:
                 mdl_print(f"Quiz {localQuiz[1]} deleted!")
                 cursor.execute(QuizzesAndWorkshopsDeleteQuery.format("Quizzes"), (localQuiz[0],))
-                quizzesDeleted += f"- ~~{localQuiz[1]}~~\n"
+                changeLog["Quizzes"]["DELETED"] += f"- ~~{localQuiz[1]}~~\n"
         # this fills up the Labels table, and we don't really need labels anyway
 
         # for label in course.labels:
@@ -416,19 +395,19 @@ async def check():
                 if (data[0] != assignment.name or  data[1] != assignment.timeOpened or data[2] != assignment.timeDue):
                     if data[0] != assignment.name:
                         mdl_print(f"Assignment name changed! New name: {assignment.name}")
-                        assignmentsChanged += f"~ ~~{data[0]}~~[{assignment.name}]({assignment.URL})\n"
+                        changeLog["Assignments"]["CHANGED"] += f"~ ~~{data[0]}~~[{assignment.name}]({assignment.URL})\n"
                     else:
-                        assignmentsChanged += f"~ [{assignment.name}]({assignment.URL})\n"
+                        changeLog["Assignments"]["CHANGED"] += f"~ [{assignment.name}]({assignment.URL})\n"
                     if data[1] != assignment.timeOpened:
                         mdl_print(f"Assignment {assignment.name} time opened changed!")
-                        assignmentsChanged += f"    *Opened: ~~{str(datetime.fromtimestamp(data[1]))}~~{str(datetime.fromtimestamp(assignment.timeOpened))}*\n"
+                        changeLog["Assignments"]["CHANGED"] += f"    *Opened: ~~{str(datetime.fromtimestamp(data[1]))}~~{str(datetime.fromtimestamp(assignment.timeOpened))}*\n"
                     else:
-                        assignmentsChanged += f"    *Opened: {str(datetime.fromtimestamp(assignment.timeOpened))}*\n"
+                        changeLog["Assignments"]["CHANGED"] += f"    *Opened: {str(datetime.fromtimestamp(assignment.timeOpened))}*\n"
                     if data[2] != assignment.timeDue:
+                        changeLog["Assignments"]["CHANGED"] += f"    *Due: ~~{str(datetime.fromtimestamp(data[2]))}~~{str(datetime.fromtimestamp(assignment.timeDue))}*\n"
                         mdl_print(f"Assignment {assignment.name} time due changed!")
-                        assignmentsChanged += f"    *Due: ~~{str(datetime.fromtimestamp(data[2]))}~~{str(datetime.fromtimestamp(assignment.timeDue))}*\n"
                     else:
-                        assignmentsChanged += f"    *Due: {str(datetime.fromtimestamp(assignment.timeDue))}*\n"
+                        changeLog["Assignments"]["CHANGED"] += f"    *Due: {str(datetime.fromtimestamp(assignment.timeDue))}*\n"
                 cursor.execute(assignmentsUpdateQuery, (assignment.name, assignment.timeOpened,
                     assignment.timeDue, assignment.ID   
                 ))
@@ -438,7 +417,7 @@ async def check():
                 cursor.execute("INSERT OR IGNORE INTO Assignments(ID, courseID, Name, URL, TimeOpened, TimeDue) VALUES (?,?,?,?,?,?)",(
                     (assignment.ID, course.ID, assignment.name, assignment.URL, assignment.timeOpened, assignment.timeDue,)
                 ))
-                assignmentsAdded += f"+ [{assignment.name}]({assignment.URL})\n    *Opened: {str(datetime.fromtimestamp(assignment.timeOpened))}*\n    *Due: {str(datetime.fromtimestamp(assignment.timeDue))}*\n"
+                changeLog["Assignments"]["NEW"] += f"+ [{assignment.name}]({assignment.URL})\n    *Opened: {str(datetime.fromtimestamp(assignment.timeOpened))}*\n    *Due: {str(datetime.fromtimestamp(assignment.timeDue))}*\n"
         #check for deletion (ID)
         for localAssignment in cursor.execute("SELECT ID, Name FROM Assignments WHERE courseID=?", (course.ID,)).fetchall():
             courseAssignmentIDs = []
@@ -447,7 +426,7 @@ async def check():
             if localAssignment[0] not in courseAssignmentIDs:
                 mdl_print(f"Assignment {localAssignment[1]} deleted!")
                 cursor.execute(assignmentsDeleteQuery, (localAssignment[0],))
-                assignmentsDeleted += f"- ~~{localAssignment[1]}~~\n"
+                changeLog["Assignments"]["DELETED"] += f"- ~~{localAssignment[1]}~~\n"
 
         for page in course.pages:
             data = cursor.execute(pagesCheckQuery, (page.ID, )).fetchone()
@@ -455,19 +434,19 @@ async def check():
                 if (data[0] != page.name or data[1] != page.description):
                     if data[0] != page.name:
                         mdl_print(f"Page {data[0]} name changed! New name: {page.name}")
-                        pagesChanged += f"~ ~~{data[0]}~~[{page.name}]({page.URL})\n"
+                        changeLog["Pages"]["CHANGED"] += f"~ ~~{data[0]}~~[{page.name}]({page.URL})\n"
                     else:
-                        pagesChanged += f"~ [{page.name}]({page.URL})\n"
+                        changeLog["Pages"]["CHANGED"] += f"~ [{page.name}]({page.URL})\n"
                     if data[1] != page.description:
                         mdl_print("Page description changed!")
-                        pagesChanged += f"    *Page content modified*\n"
+                        changeLog["Pages"]["CHANGED"] += f"    *Page content modified*\n"
                 cursor.execute(pagesUpdateQuery, (page.name, page.description, page.ID, ))
             else:
                 mdl_print("New page!")
                 cursor.execute("INSERT OR IGNORE INTO Pages(ID, courseID, Name, URL, Description) VALUES (?,?,?,?,?)",(
                     (page.ID, course.ID, page.name, page.URL, page.description,)
                 ))
-                pagesAdded += f"+ [{page.name}]({page.URL})\n"
+                changeLog["Pages"]["NEW"] += f"+ [{page.name}]({page.URL})\n"
         # check for deletion (ID)
         for localPage in cursor.execute("SELECT ID, Name FROM Pages WHERE courseID=?", (course.ID,)).fetchall():
             coursePageIDs = []
@@ -476,7 +455,7 @@ async def check():
             if localPage[0] not in coursePageIDs:
                 mdl_print(f"Page {localPage[1]} deleted!")
                 cursor.execute(pagesDeleteQuery, (localPage[0],))
-                pagesDeleted += f"- ~~{localPage[1]}~~\n"
+                changeLog["Pages"]["DELETED"] += f"- ~~{localPage[1]}~~\n"
 
         for workshop in course.workshops:
             data = cursor.execute(QuizzesAndWorkshopsCheckQuery.format("Workshops"), (workshop.ID,)).fetchone()
@@ -485,14 +464,14 @@ async def check():
                 if data[0] != workshop.name:
                     mdl_print(f"Workshop {data[0]} name changed! New name: {workshop.name}")
                     cursor.execute(QuizzesAndWorkshopsUpdateQuery.format("Workshops"), (workshop.name, workshop.ID,))
-                    workshopsChanged += f"~ ~~{data[0]}~~[{workshop.name}]({workshop.URL})\n"
+                    changeLog["Workshops"]["CHANGED"] += f"~ ~~{data[0]}~~[{workshop.name}]({workshop.URL})\n"
             else:
                 mdl_print(f"New workshop: URL: {workshop.URL}")
                 cursor.execute("INSERT OR IGNORE INTO Workshops(ID, courseID, Name, URL) VALUES (?,?,?,?)",(
                     (workshop.ID, course.ID, workshop.name, workshop.URL, )
                 ))
-                workshopsAdded += f"+ [{workshop.name}]({workshop.URL})\n"
-        # check for deletion (ID)        
+                changeLog["Workshops"]["NEW"] += f"+ [{workshop.name}]({workshop.URL})\n"
+        # check for deletion (ID)
         for localWorkshop in cursor.execute("SELECT ID, Name FROM Workshops WHERE courseID=?", (course.ID,)).fetchall():
             courseWorkshopIDs=[]
             for workshop in course.workshops:
@@ -500,8 +479,8 @@ async def check():
             if localWorkshop[0] not in courseWorkshopIDs:
                 mdl_print(f"Workshop {localWorkshop[1]} deleted!")
                 cursor.execute(QuizzesAndWorkshopsDeleteQuery.format("Workshops"),(localWorkshop[0],))
-                workshopsDeleted += f"- ~~{localWorkshop[1]}~~\n"
-        
+                changeLog["Workshops"]["DELETED"] += f"- ~~{localWorkshop[1]}~~\n"
+
         for forum in course.forums:
             cursor.execute("INSERT OR IGNORE INTO Forums(ID, courseID, Name, URL) VALUES (?,?,?,?)",(
                 (forum.ID, course.ID, forum.name, forum.URL, )
@@ -513,12 +492,12 @@ async def check():
                         mdl_print(f"Discussion {discussion.name} update!")
                         if discussion.name != data[0]:
                             mdl_print(f"Discussion {data[0]} name changed! New name: {discussion.name}")
-                            discussionsChanged += f"~ ~~{data[0]}~~[{discussion.name}]({discussion.URL})\n"
+                            changeLog["Discussions"]["CHANGED"] += f"~ ~~{data[0]}~~[{discussion.name}]({discussion.URL})\n"
                         else:
-                            discussionsChanged += f"~ [{discussion.name}]({discussion.URL})\n"
+                            changeLog["Discussions"]["CHANGED"] += f"~ [{discussion.name}]({discussion.URL})\n"
                         if discussion.message != data[2]:
                             mdl_print(f"Message update! Old message: {data[2]} New message: {discussion.message} Link: {discussion.URL}")
-                            discussionsChanged += f"    *Discussion content modified*\n"
+                            changeLog["Discussions"]["CHANGED"] += f"    *Discussion content modified*\n"
                         cursor.execute(discussionsUpdateQuery,(discussion.name, discussion.timeModified, discussion.message, discussion.ID,))
                 
                 else: #new discussion
@@ -543,8 +522,8 @@ async def check():
                             cursor.execute(filesUpdateDiscussionQuery, (
                                 attachment.path, attachment.size, attachment.timeModified,
                                 attachment.author, attachment.URL, attachment.License, "",attachment.filename, course.ID, discussion.ID, attachment.path))
-                            attachmentsChanged += f"~ [{attachment.filename}]({attachment.URL.replace('webservice/', '')}) ({filesizeConversion(attachment.size)})\n"
-                    
+                            changeLog["Attachments"]["CHANGED"] += f"~ [{attachment.filename}]({attachment.URL.replace('webservice/', '')}) ({filesizeConversion(attachment.size)})\n"
+
                     else: #new file
                         mdl_print(f"New attachment found! URL: {attachment.URL}")
                         query = '''INSERT OR IGNORE INTO Files(courseID, Filename, Path, Size, TimeModified, MimeType, Author, URL, License, MD5, discussionID) 
@@ -555,7 +534,7 @@ async def check():
                                 "", discussion.ID)
                             ))
 
-                        attachmentsAdded += f"+ [{attachment.filename}]({attachment.URL.replace('webservice/', '')}) ({filesizeConversion(attachment.size)}) by *{attachment.author}* in discussion [{discussion.name}]({discussion.URL})\n"
+                        changeLog["Attachments"]["NEW"] += f"+ [{attachment.filename}]({attachment.URL.replace('webservice/', '')}) ({filesizeConversion(attachment.size)}) by *{attachment.author}* in discussion [{discussion.name}]({discussion.URL})\n"
                 #check attachment deletion (by URL)
                 for localAttachment in cursor.execute("SELECT URL, Filename FROM Files WHERE courseID=? AND discussionID=?", (course.ID, discussion.ID)).fetchall():
                     discussionFileURLs = []
@@ -564,7 +543,7 @@ async def check():
                     if localAttachment[0] not in discussionFileURLs:
                         mdl_print(f"Attachment {localAttachment[1]} from discussion {discussion.name} deleted!")
                         cursor.execute(filesDeleteDiscussionQuery, (localAttachment[0], discussion.ID))
-                        attachmentsDeleted += f"- ~~{localAttachment[1]}~~ in discussion [{discussion.name}]({discussion.URL})\n"
+                        changeLog["Attachments"]["DELETED"] += f"- ~~{localAttachment[1]}~~ in discussion [{discussion.name}]({discussion.URL})\n"
 
             for localDiscussion in cursor.execute("SELECT ID, Name FROM Discussions WHERE forumID=?", (forum.ID,)).fetchall():
                 forumDiscussionIDs = []
@@ -574,7 +553,7 @@ async def check():
                     mdl_print(f"Discussion {localDiscussion[1]} deleted!")
                     cursor.execute("DELETE FROM Files WHERE discussionID=?", (localDiscussion[0],)) # also delete the files to tidy the DB
                     cursor.execute(discussionsDeleteQuery, (localDiscussion[0],))
-                    discussionsDeleted += f"- ~~{localDiscussion[1]}~~\n"
+                    changeLog["Discussions"]["DELETED"] += f"- ~~{localDiscussion[1]}~~\n"
         for localForum in cursor.execute("SELECT ID, Name FROM Forums WHERE courseID=?", (course.ID,)).fetchall():
             courseForumIDs = []
             for forum in course.forums:
@@ -585,169 +564,23 @@ async def check():
                     cursor.execute("DELETE FROM Files WHERE discussionID=?", (i[0],))
                 cursor.execute("DELETE FROM Discussions WHERE forumID=?", (localForum[0],))
                 cursor.execute("DELETE FROM Forums WHERE ID=?", (localForum[0],))
-                forumsDeleted += f"- ~~{localForum[1]}~~\n"
+                changeLog["Forums"]["DELETED"] += f"- ~~{localForum[1]}~~\n"
 
         if not FIRST_RUN:
-            if len(filesAdded) > 0 and len(filesAdded) < 4096:
-                embed = nextcord.Embed(title="File list:", color=config.FILE_EMBED_COLOR, description=filesAdded)
-                embed.set_author(name=f"New files in course: {course.name}", url=course.URL)
-                dc_print(f"Sending new files in course {course.name}")
-                await notificationCh.send(embed=embed)
-            elif len(filesAdded) > 4096:
-                await messageSplitter(notificationCh, filesAdded, config.FILES_PER_EMBED, "File", course, "NEW", config.FILE_EMBED_COLOR)
-
-            if len(filesChanged) > 0 and len(filesChanged) < 4096:
-                embed = nextcord.Embed(title="File list:", color=config.FILE_EMBED_COLOR, description=filesChanged)
-                embed.set_author(name=f"Files changed in course: {course.name}", url=course.URL)
-                dc_print(f"Sending changed files in course: {course.name}")
-                await notificationCh.send(embed=embed)
-            elif len(filesChanged) > 4096:
-                await messageSplitter(notificationCh, filesChanged, config.FILES_PER_EMBED, "File", course, "CHANGED", config.FILE_EMBED_COLOR)
-
-            if len(filesDeleted) > 0 and len(filesDeleted) < 4096:
-                embed = nextcord.Embed(title="File list:", color=config.FILE_EMBED_COLOR, description=filesDeleted)
-                embed.set_author(name=f"Files deleted in course: {course.name}", url=course.URL)
-                dc_print(f"Sending deleted files in course: {course.name}")
-                await notificationCh.send(embed=embed)
-                saveAPIResponse(jsonResponse=moodle.getCourseData(courseID=course.ID), savePath=path.join(config.DOWNLOAD_DIR,"API_RESPONSES"), course=course.name)
-            elif len(filesDeleted) > 4096:
-                await messageSplitter(notificationCh, filesDeleted, config.FILES_PER_EMBED, "File", course, "DELETED", config.FILE_EMBED_COLOR)
-                saveAPIResponse(jsonResponse=moodle.getCourseData(courseID=course.ID), savePath=path.join(config.DOWNLOAD_DIR,"API_RESPONSES"), course=course.name)
-
-            if len(linksAdded) > 0 and len(linksAdded) < 4096:
-                embed = nextcord.Embed(title="Link list:", color=config.LINK_EMBED_COLOR, description=linksAdded)
-                embed.set_author(name=f"New links in course: {course.name}", url=course.URL)
-                dc_print(f"Sending new links in course {course.name}")
-                await notificationCh.send(embed=embed)
-            elif len(filesAdded) > 4096:
-                await messageSplitter(notificationCh, linksAdded, config.LINKS_PER_EMBED, "Link", course, "NEW", config.LINK_EMBED_COLOR)
-
-            if len(linksChanged) > 0 and len(linksChanged) < 4096:
-                embed = nextcord.Embed(title="Link list:", color=config.LINK_EMBED_COLOR, description=linksChanged)
-                embed.set_author(name=f"Links changed in course: {course.name}", url=course.URL)
-                dc_print(f"Sending changed links in course: {course.name}")
-                await notificationCh.send(embed=embed)
-            elif len(filesChanged) > 4096:
-                await messageSplitter(notificationCh, linksChanged, config.LINKS_PER_EMBED, "Link", course, "CHANGED", config.LINK_EMBED_COLOR)
-
-            if len(linksDeleted) > 0 and len(linksDeleted) < 4096:
-                embed = nextcord.Embed(title="Link list:", color=config.LINK_EMBED_COLOR, description=linksDeleted)
-                embed.set_author(name=f"Links deleted in course: {course.name}", url=course.URL)
-                dc_print(f"Sending deleted links in course: {course.name}")
-                await notificationCh.send(embed=embed)
-            elif len(filesDeleted) > 4096:
-                await messageSplitter(notificationCh, linksDeleted, config.LINKS_PER_EMBED, "Link", course, "DELETED", config.LINK_EMBED_COLOR)
-
-            if len(quizzesAdded) > 0:
-                embed = nextcord.Embed(title="Quiz list:", color=config.QUIZ_EMBED_COLOR, description=quizzesAdded)
-                embed.set_author(name=f"New quizzes in course: {course.name}", url=course.URL)
-                dc_print(f"Sending new quizzes in course {course.name}")
-                await notificationCh.send(embed=embed)
-            if len(quizzesChanged) > 0:
-                embed = nextcord.Embed(title="Quiz list:", color=config.QUIZ_EMBED_COLOR, description=quizzesChanged)
-                embed.set_author(name=f"Quizzes changed in course: {course.name}", url=course.URL)
-                dc_print(f"Sending changed quizzes in course: {course.name}")
-                await notificationCh.send(embed=embed)
-            if len(quizzesDeleted) > 0:
-                embed = nextcord.Embed(title="Quiz list:", color=config.QUIZ_EMBED_COLOR, description=quizzesDeleted)
-                embed.set_author(name=f"Quizzes deleted in course: {course.name}", url=course.URL)
-                dc_print(f"Sending deleted quizzes in course: {course.name}")
-                await notificationCh.send(embed=embed)
-
-            if len(assignmentsAdded) > 0:
-                embed = nextcord.Embed(title="Assignment list:", color=config.ASSIGNMENT_EMBED_COLOR, description=assignmentsAdded)
-                embed.set_author(name=f"New assignments in course: {course.name}", url=course.URL)
-                dc_print(f"Sending new assignments in course {course.name}")
-                await notificationCh.send(embed=embed)
-            if len(assignmentsChanged) > 0:
-                embed = nextcord.Embed(title="Assignment list:", color=config.ASSIGNMENT_EMBED_COLOR, description=assignmentsChanged)
-                embed.set_author(name=f"Assignments changed in course: {course.name}", url=course.URL)
-                dc_print(f"Sending changed assignments in course: {course.name}")
-                await notificationCh.send(embed=embed)
-            if len(assignmentsDeleted) > 0:
-                embed = nextcord.Embed(title="Assignment list:", color=config.ASSIGNMENT_EMBED_COLOR, description=assignmentsDeleted)
-                embed.set_author(name=f"assignments deleted in course: {course.name}", url=course.URL)
-                dc_print(f"Sending deleted assignments in course: {course.name}")
-                await notificationCh.send(embed=embed)
-
-            if len(pagesAdded) > 0:
-                embed = nextcord.Embed(title="Page list:", color=config.PAGE_EMBED_COLOR, description=pagesAdded)
-                embed.set_author(name=f"New pages in course: {course.name}", url=course.URL)
-                dc_print(f"Sending new pages in course {course.name}")
-                await notificationCh.send(embed=embed)
-            if len(pagesChanged) > 0:
-                embed = nextcord.Embed(title="Page list:", color=config.PAGE_EMBED_COLOR, description=pagesChanged)
-                embed.set_author(name=f"Pages changed in course: {course.name}", url=course.URL)
-                dc_print(f"Sending changed pages in course: {course.name}")
-                await notificationCh.send(embed=embed)
-            if len(pagesDeleted) > 0:
-                embed = nextcord.Embed(title="Page list:", color=config.PAGE_EMBED_COLOR, description=pagesDeleted)
-                embed.set_author(name=f"Pages deleted in course: {course.name}", url=course.URL)
-                dc_print(f"Sending deleted pages in course: {course.name}")
-                await notificationCh.send(embed=embed)
-
-            if len(workshopsAdded) > 0:
-                embed = nextcord.Embed(title="Workshop list:", color=config.WORKSHOP_EMBED_COLOR, description=workshopsAdded)
-                embed.set_author(name=f"New workshops in course: {course.name}", url=course.URL)
-                dc_print(f"Sending new workshops in course {course.name}")
-                await notificationCh.send(embed=embed)
-            if len(workshopsChanged) > 0:
-                embed = nextcord.Embed(title="Workshop list:", color=config.WORKSHOP_EMBED_COLOR, description=workshopsChanged)
-                embed.set_author(name=f"Workshops changed in course: {course.name}", url=course.URL)
-                dc_print(f"Sending changed workshops in course: {course.name}")
-                await notificationCh.send(embed=embed)
-            if len(workshopsDeleted) > 0:
-                embed = nextcord.Embed(title="Workshop list:", color=config.WORKSHOP_EMBED_COLOR, description=workshopsDeleted)
-                embed.set_author(name=f"Workshops deleted in course: {course.name}", url=course.URL)
-                dc_print(f"Sending deleted workshops in course: {course.name}")
-                await notificationCh.send(embed=embed)
-
-            if len(forumsDeleted) > 0:
-                embed = nextcord.Embed(title="Forum list:", color=config.FORUM_EMBED_COLOR, description=forumsDeleted)
-                embed.set_author(name=f"Forums deleted in course: {course.name}", url=course.URL)
-                dc_print(f"Sending deleted forums in course: {course.name}")
-                await notificationCh.send(embed=embed)
-
-            if len(discussionsChanged) > 0 and len(discussionsChanged) < 4096:
-                embed = nextcord.Embed(title="Discussion list:", color=config.DISCUSSION_EMBED_COLOR, description=discussionsChanged)
-                embed.set_author(name=f"Discussions changed in course: {course.name}", url=course.URL)
-                dc_print(f"Sending changed discussions in course: {course.name}")
-                await notificationCh.send(embed=embed)
-            elif len(discussionsChanged) > 4096:
-                await messageSplitter(notificationCh, discussionsChanged, config.DISCUSSIONS_PER_EMBED, "Discussions", course, "CHANGED", config.DISCUSSION_EMBED_COLOR)
-
-            if len(discussionsDeleted) > 0 and len(discussionsDeleted) < 4096:
-                embed = nextcord.Embed(title="Discussion list:", color=config.DISCUSSION_EMBED_COLOR, description=discussionsDeleted)
-                embed.set_author(name=f"Discussions deleted in course: {course.name}", url=course.URL)
-                dc_print(f"Sending deleted workshops in course: {course.name}")
-                await notificationCh.send(embed=embed)
-            elif len(discussionsDeleted) > 4096:
-                await messageSplitter(notificationCh, discussionsDeleted, config.DISCUSSIONS_PER_EMBED, "Discussions", course, "DELETED", config.DISCUSSION_EMBED_COLOR)
-
-            if len(attachmentsAdded) > 0 and len(attachmentsAdded) < 4096:
-                embed = nextcord.Embed(title="Attachment list:", color=config.ATTACHMENT_EMBED_COLOR, description=attachmentsAdded)
-                embed.set_author(name=f"New attachments in course: {course.name}", url=course.URL)
-                dc_print(f"Sending new attachments in course {course.name}")
-                await notificationCh.send(embed=embed)
-            elif len(attachmentsAdded) > 4096:
-                await messageSplitter(notificationCh, attachmentsAdded, config.ATTACHMENTS_PER_EMBED, "Attachments", course, "NEW", config.ATTACHMENT_EMBED_COLOR)
-
-            if len(attachmentsChanged) > 0 and len(attachmentsChanged) < 4096:
-                embed = nextcord.Embed(title="Attachment list:", color=config.ATTACHMENT_EMBED_COLOR, description=attachmentsChanged)
-                embed.set_author(name=f"Attachments changed in course: {course.name}", url=course.URL)
-                dc_print(f"Sending changed attachments in course: {course.name}")
-                await notificationCh.send(embed=embed)
-            elif len(attachmentsChanged) > 4096:
-                await messageSplitter(notificationCh, attachmentsChanged, config.ATTACHMENTS_PER_EMBED, "Attachments", course, "CHANGED", config.ATTACHMENT_EMBED_COLOR)
-
-            if len(attachmentsDeleted) > 0 and len(attachmentsDeleted) < 4096:
-                embed = nextcord.Embed(title="Attachment list:", color=config.ATTACHMENT_EMBED_COLOR, description=attachmentsDeleted)
-                embed.set_author(name=f"Attachments deleted in course: {course.name}", url=course.URL)
-                dc_print(f"Sending deleted attachments in course: {course.name}")
-                await notificationCh.send(embed=embed)
-            elif len(attachmentsDeleted) > 4096:
-                await messageSplitter(notificationCh, attachmentsDeleted, config.ATTACHMENTS_PER_EMBED, "Attachments", course, "DELETED", config.ATTACHMENT_EMBED_COLOR)
-
+            for courseItem in changeLog:
+                for state in changeLog[courseItem]:
+                    message = changeLog[courseItem][state]
+                    if state == "NEW":
+                        embedAuthor = f"New {courseItem.lower()} in course: {course.name}"
+                    else:
+                        embedAuthor = f"{courseItem} {state.lower()} in course: {course.name}"
+                    if len(message) > 0 and len(message) < 4096:
+                        embed = nextcord.Embed(title=f"{courseItem} list:", color=config.FILE_EMBED_COLOR, description=message)
+                        embed.set_author(name=embedAuthor, url=course.URL)
+                        dc_print(f"Sending {state.lower()} {courseItem.lower()} in course {course.name}")
+                        await notificationCh.send(embed=embed)
+                    elif len(message) > 4096:
+                        await messageSplitter(notificationCh, message, config.FILES_PER_EMBED, courseItem, course, state, config.FILE_EMBED_COLOR)
     FIRST_RUN = False
     connector.commit()
     connector.close()
