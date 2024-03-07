@@ -244,13 +244,13 @@ async def check():
     filesCheckQuery = "SELECT TimeModified,URL FROM Files WHERE Filename = ? AND courseID=? AND moduleID=? AND Path=? AND discussionID IS NULL"
     filesUpdateQuery = '''UPDATE Files SET Path=?, Size=?, TimeModified=?, Author=?, URL=?, License=?, MD5=?
         WHERE Filename=? AND courseID=? AND moduleID=? AND Path=? AND DiscussionID IS NULL'''
-    filesDeleteQuery = "DELETE FROM Files WHERE CourseID = ? AND URL = ? AND discussionID IS NULL"
+    filesDeleteQuery = "DELETE FROM Files WHERE courseID = ? AND URL = ? AND DiscussionID IS NULL"
 
-    linksCheckQuery = "SELECT TimeModified,URL FROM Files WHERE Filename = ? AND courseID=? AND moduleID=? AND Path IS NULL AND discussionID IS NULL"
+    linksCheckQuery = "SELECT TimeModified,URL FROM Files WHERE Filename = ? AND courseID=? AND moduleID=? AND Path IS NULL AND DiscussionID IS NULL"
     linksUpdateQuery = '''UPDATE Files SET Path=NULL, Size=?, TimeModified=?, Author=?, URL=?, License=?, MD5=?
         WHERE Filename=? AND courseID=? AND moduleID=? AND Path IS NULL AND DiscussionID IS NULL'''
 
-    filesCheckDiscussionQuery = "SELECT TimeModified,URL FROM Files WHERE Filename = ? AND courseID=? AND Path=? AND discussionID=? AND moduleID IS NULL"
+    filesCheckDiscussionQuery = "SELECT TimeModified,URL FROM Files WHERE Filename = ? AND courseID=? AND Path=? AND DiscussionID=? AND moduleID IS NULL"
     filesUpdateDiscussionQuery = '''UPDATE Files SET Path=?, Size=?, TimeModified=?, Author=?, URL=?, License=?, MD5=?
     WHERE Filename=? AND courseID=? AND DiscussionID=? AND Path=? AND moduleID IS NULL'''
     filesDeleteDiscussionQuery = "DELETE FROM Files WHERE URL = ? AND courseID=? AND moduleID IS NULL"
@@ -342,7 +342,7 @@ async def check():
                         ))
                     changeLog["Links"]["NEW"] += f"+ [{file.filename}]({file.URL.replace('webservice/', '')})\n"
         # check for deletion (URL-based)
-        for localFile in cursor.execute("SELECT URL, Filename, Size, Path FROM Files WHERE courseID=? AND discussionID IS NULL", (course.ID,)).fetchall():
+        for localFile in cursor.execute("SELECT URL, Filename, Size, Path FROM Files WHERE courseID=? AND DiscussionID IS NULL", (course.ID,)).fetchall():
             if localFile[3] != None:
                 courseFileURLs = []
                 for file in course.files:
@@ -526,7 +526,7 @@ async def check():
 
                     else: #new file
                         mdl_print(f"New attachment found! URL: {attachment.URL}")
-                        query = '''INSERT OR IGNORE INTO Files(courseID, Filename, Path, Size, TimeModified, MimeType, Author, URL, License, MD5, discussionID) 
+                        query = '''INSERT OR IGNORE INTO Files(courseID, Filename, Path, Size, TimeModified, MimeType, Author, URL, License, MD5, DiscussionID)
                                 VALUES (?,?,?,?,?,?,?,?,?,?,?)
                                 '''
                         cursor.execute(query,(
@@ -536,7 +536,7 @@ async def check():
 
                         changeLog["Attachments"]["NEW"] += f"+ [{attachment.filename}]({attachment.URL.replace('webservice/', '')}) ({filesizeConversion(attachment.size)}) by *{attachment.author}* in discussion [{discussion.name}]({discussion.URL})\n"
                 #check attachment deletion (by URL)
-                for localAttachment in cursor.execute("SELECT URL, Filename FROM Files WHERE courseID=? AND discussionID=?", (course.ID, discussion.ID)).fetchall():
+                for localAttachment in cursor.execute("SELECT URL, Filename FROM Files WHERE courseID=? AND DiscussionID=?", (course.ID, discussion.ID)).fetchall():
                     discussionFileURLs = []
                     for attachment in discussion.files:
                         discussionFileURLs.append(attachment.URL)
@@ -551,7 +551,7 @@ async def check():
                     forumDiscussionIDs.append(discussion.ID)
                 if localDiscussion[0] not in forumDiscussionIDs:
                     mdl_print(f"Discussion {localDiscussion[1]} deleted!")
-                    cursor.execute("DELETE FROM Files WHERE discussionID=?", (localDiscussion[0],)) # also delete the files to tidy the DB
+                    cursor.execute("DELETE FROM Files WHERE DiscussionID=?", (localDiscussion[0],)) # also delete the files to tidy the DB
                     cursor.execute(discussionsDeleteQuery, (localDiscussion[0],))
                     changeLog["Discussions"]["DELETED"] += f"- ~~{localDiscussion[1]}~~\n"
         for localForum in cursor.execute("SELECT ID, Name FROM Forums WHERE courseID=?", (course.ID,)).fetchall():
@@ -561,7 +561,7 @@ async def check():
             if localForum[0] not in courseForumIDs:
                 mdl_print(f"Forum {localForum[1]} deleted, deleting discussions and attachments!")
                 for i in cursor.execute("SELECT ID FROM Discussions WHERE forumID=?", (localForum[0],)).fetchall():
-                    cursor.execute("DELETE FROM Files WHERE discussionID=?", (i[0],))
+                    cursor.execute("DELETE FROM Files WHERE DiscussionID=?", (i[0],))
                 cursor.execute("DELETE FROM Discussions WHERE forumID=?", (localForum[0],))
                 cursor.execute("DELETE FROM Forums WHERE ID=?", (localForum[0],))
                 changeLog["Forums"]["DELETED"] += f"- ~~{localForum[1]}~~\n"
