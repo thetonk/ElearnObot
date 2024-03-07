@@ -253,7 +253,7 @@ async def check():
     filesCheckDiscussionQuery = "SELECT TimeModified,URL FROM Files WHERE Filename = ? AND courseID=? AND Path=? AND discussionID=? AND moduleID IS NULL"
     filesUpdateDiscussionQuery = '''UPDATE Files SET Path=?, Size=?, TimeModified=?, Author=?, URL=?, License=?, MD5=?
     WHERE Filename=? AND courseID=? AND DiscussionID=? AND Path=? AND moduleID IS NULL'''
-    filesDeleteDiscussionQuery = "DELETE FROM Files WHERE URL = ? AND ID=?"
+    filesDeleteDiscussionQuery = "DELETE FROM Files WHERE URL = ? AND courseID=? AND moduleID IS NULL"
 
     #forumsCheckQuery = "SELECT Name FROM Forums WHERE ID = ?"
     #forumsUpdateQuery = "UPDATE Forums SET Name=? WHERE ID = ?"
@@ -542,7 +542,7 @@ async def check():
                         discussionFileURLs.append(attachment.URL)
                     if localAttachment[0] not in discussionFileURLs:
                         mdl_print(f"Attachment {localAttachment[1]} from discussion {discussion.name} deleted!")
-                        cursor.execute(filesDeleteDiscussionQuery, (localAttachment[0], discussion.ID))
+                        cursor.execute(filesDeleteDiscussionQuery, (localAttachment[0], course.ID))
                         changeLog["Attachments"]["DELETED"] += f"- ~~{localAttachment[1]}~~ in discussion [{discussion.name}]({discussion.URL})\n"
 
             for localDiscussion in cursor.execute("SELECT ID, Name FROM Discussions WHERE forumID=?", (forum.ID,)).fetchall():
