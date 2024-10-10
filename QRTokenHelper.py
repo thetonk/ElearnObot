@@ -15,5 +15,5 @@ if(responseJson[0]['error']):
     print("You also need to make sure that you run this script from the same IP you used to get the QR.")
 else:
     print("Success!")
-    print(f"Token (use this for the bot): {responseJson[0]['token']}")
-    print(f"privateToken: {responseJson[0]['privatetoken']}")
+    print(f"Token (use this for the bot): {responseJson[0]['data']['token']}")
+    print(f"privateToken: {responseJson[0]['data']['privatetoken']}")
