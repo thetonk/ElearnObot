@@ -43,7 +43,7 @@ async def messageSplitter(channel, message: str, itemsCountPerMessage: int, item
         for message in items[:itemsCountPerMessage]:
             messages += message+"\n"
         embed = nextcord.Embed(title=f"{itemType} list: {m+1}/{totalMessages}", color=embedColor, description=messages)
-        embed.set_author(name=f"{itemState} {itemType}s in course: {course.name}", url=course.URL)
+        embed.set_author(name=f"{itemState} {itemType} in course: {course.name}", url=course.URL)
         dc_print(f"Sending {itemState} {itemType} in course {course.name} by parts (too many characters for single message!). Progress: {m+1}/{totalMessages}")
         await channel.send(embed=embed)
         del items[:itemsCountPerMessage]
@@ -570,17 +570,14 @@ async def check():
             for courseItem in changeLog:
                 for state in changeLog[courseItem]:
                     message = changeLog[courseItem][state]
-                    if state == "NEW":
-                        embedAuthor = f"New {courseItem.lower()} in course: {course.name}"
-                    else:
-                        embedAuthor = f"{courseItem} {state.lower()} in course: {course.name}"
+                    embedAuthor = f"{state} {courseItem} in course: {course.name}"
                     if len(message) > 0 and len(message) < 4096:
                         embed = nextcord.Embed(title=f"{courseItem} list:", color=config.FILE_EMBED_COLOR, description=message)
                         embed.set_author(name=embedAuthor, url=course.URL)
                         dc_print(f"Sending {state.lower()} {courseItem.lower()} in course {course.name}")
                         await notificationCh.send(embed=embed)
                     elif len(message) > 4096:
-                        await messageSplitter(notificationCh, message, config.FILES_PER_EMBED, courseItem, course, state, config.FILE_EMBED_COLOR)
+                        await messageSplitter(notificationCh, message, config.FILES_PER_EMBED, courseItem.lower(), course, state, config.FILE_EMBED_COLOR)
     FIRST_RUN = False
     connector.commit()
     connector.close()

@@ -2,6 +2,9 @@ import requests, config
 from bs4 import BeautifulSoup
 from os import makedirs, path
 
+USER_AGENT = "MoodleMobile 4.1.1"
+HEADERS = {"User-Agent": USER_AGENT}
+
 class moodleInterface():
 
     def __init__(self):
@@ -12,24 +15,24 @@ class moodleInterface():
 
     def getCourses(self):
         parameters = {"wsfunction": "core_enrol_get_users_courses", "userid": config.USERID}
-        r  = requests.get(self.URL, params=parameters).json()
+        r  = requests.get(self.URL, params=parameters, headers=HEADERS).json()
         return r
 
     def getCourseData(self, *, courseID: int):
         parameters = {"wsfunction": "core_course_get_contents", "courseid" : courseID}
-        r = requests.get(self.URL, params=parameters).json()
+        r = requests.get(self.URL, params=parameters, headers=HEADERS).json()
         return r
     
     def getForums(self, *, courseIDs: list):
         parameters = {"wsfunction": "mod_forum_get_forums_by_courses"}
         for i in range(len(courseIDs)):
             parameters["courseids[{}]".format(i)] = courseIDs[i]
-        r = requests.get(self.URL, params=parameters).json()
+        r = requests.get(self.URL, params=parameters, headers=HEADERS).json()
         return r
     
     def getForumDiscussions(self, *, forumID: int):
         parameters = {"wsfunction": "mod_forum_get_forum_discussions", "forumid": forumID}
-        r = requests.get(self.URL, params=parameters).json()
+        r = requests.get(self.URL, params=parameters, headers=HEADERS).json()
         return r
 
     def getQuizzes(self, *, courseIDs: list):
@@ -37,7 +40,7 @@ class moodleInterface():
         for i in range(len(courseIDs)):
             parameters["courseids[{}]".format(i)] = courseIDs[i]
 
-        r = requests.get(self.URL, params=parameters).json()
+        r = requests.get(self.URL, params=parameters, headers=HEADERS).json()
         return r
 
     def getAssignments(self, *, courseIDs: list):
@@ -45,7 +48,7 @@ class moodleInterface():
         for i in range(len(courseIDs)):
             parameters["courseids[{}]".format(i)] = courseIDs[i]
 
-        r = requests.get(self.URL, params=parameters).json()
+        r = requests.get(self.URL, params=parameters, headers=HEADERS).json()
         return r
 
 
@@ -65,7 +68,7 @@ class File:
         dest = path.join(downloadPath, self.path[1:])
         if not path.exists(dest):
             makedirs(dest)
-        r = requests.get(f"{self.URL}&token={config.API_TOKEN}").content
+        r = requests.get(f"{self.URL}&token={config.API_TOKEN}",headers=HEADERS).content
         if path.exists(path.join(dest, self.filename)):
             count = 1
             while True:
@@ -222,7 +225,7 @@ class Course:
                     #NOTE: pages always have one index.html file which is their text content.
                     
                     htmlpath = module["contents"][0]["fileurl"] 
-                    html = requests.get(htmlpath+"&token={}".format(config.API_TOKEN)).content
+                    html = requests.get(htmlpath+"&token={}".format(config.API_TOKEN),headers=HEADERS).content
                     soup = BeautifulSoup(html, "html.parser")
                     self.pages.append(Page(
                         name = module["name"],
