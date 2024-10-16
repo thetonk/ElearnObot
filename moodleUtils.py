@@ -204,8 +204,8 @@ class Course:
                         name = module["name"],
                         assignmentID = module["id"],
                         assignmentURL = module["url"],
-                        timeOpened = module["dates"][0]["timestamp"] if "dates" in module else 0,
-                        timeDue = module["dates"][1]["timestamp"] if "dates" in module else 0
+                        timeOpened = module["dates"][0]["timestamp"] if "dates" in module and len(module["dates"]) == 2 else 0,
+                        timeDue = module["dates"][1]["timestamp"] if "dates" in module and len(module["dates"]) == 2 else 0
                     ))
                 elif moduleType == "Workshops":
                     self.workshops.append(Workshop(
