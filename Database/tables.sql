@@ -8,6 +8,15 @@ CREATE TABLE Courses (
 );
 
 
+-- Users definition
+
+CREATE TABLE Users (
+	ID INTEGER NOT NULL,
+	ApiToken TEXT(50) NOT NULL,
+	CONSTRAINT Users_PK PRIMARY KEY (ID)
+);
+
+
 -- Assignments definition
 
 CREATE TABLE Assignments (
@@ -19,21 +28,6 @@ CREATE TABLE Assignments (
 	TimeDue INTEGER,
 	CONSTRAINT Assignments_PK PRIMARY KEY (ID),
 	CONSTRAINT Assignments_Courses_FK FOREIGN KEY (courseID) REFERENCES Courses(courseID) ON DELETE CASCADE
-);
-
-
--- Discussions definition
-
-CREATE TABLE Discussions (
-	ID INTEGER NOT NULL,
-	courseID INTEGER NOT NULL,
-	Name TEXT,
-	URL TEXT,
-	TimeModified INTEGER NOT NULL,
-	Message TEXT NOT NULL,
-	forumID INTEGER,
-	CONSTRAINT Discussions_PK PRIMARY KEY (ID),
-	CONSTRAINT Discussions_Courses_FK FOREIGN KEY (courseID) REFERENCES Courses(courseID) ON DELETE CASCADE
 );
 
 
@@ -51,8 +45,6 @@ CREATE TABLE Files (
 	URL TEXT NOT NULL,
 	License TEXT,
 	MD5 TEXT NOT NULL,
-	DiscussionID INTEGER,
-	moduleID INTEGER,
 	CONSTRAINT Files_Courses_FK FOREIGN KEY (courseID) REFERENCES Courses(courseID) ON DELETE CASCADE
 );
 
@@ -104,6 +96,17 @@ CREATE TABLE Quizzes (
 );
 
 
+-- UserCourses definition
+
+CREATE TABLE UserCourses (
+	CourseID INTEGER NOT NULL,
+	UserID INTEGER NOT NULL,
+	CONSTRAINT UserCourses_PK PRIMARY KEY (CourseID,UserID),
+	CONSTRAINT UserCourses_Users_FK FOREIGN KEY (UserID) REFERENCES Users(ID),
+	CONSTRAINT UserCourses_Courses_FK FOREIGN KEY (CourseID) REFERENCES Courses(courseID)
+);
+
+
 -- Workshops definition
 
 CREATE TABLE Workshops (
@@ -113,4 +116,35 @@ CREATE TABLE Workshops (
 	URL TEXT,
 	CONSTRAINT Workshops_PK PRIMARY KEY (ID),
 	CONSTRAINT Workshops_Courses_FK FOREIGN KEY (courseID) REFERENCES Courses(courseID) ON DELETE CASCADE
+);
+
+
+-- Discussions definition
+
+CREATE TABLE Discussions (
+	ID INTEGER NOT NULL,
+	Name TEXT,
+	URL TEXT,
+	TimeModified INTEGER NOT NULL,
+	Message TEXT NOT NULL,
+	forumID INTEGER,
+	CONSTRAINT Discussions_PK PRIMARY KEY (ID),
+	CONSTRAINT Discussions_Forums_FK FOREIGN KEY (forumID) REFERENCES Forums(ID)
+);
+
+
+-- FilesOfDiscussions definition
+
+CREATE TABLE FilesOfDiscussions (
+	ID INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+	Filename TEXT NOT NULL,
+	"Size" INTEGER NOT NULL,
+	TimeModified INTEGER NOT NULL,
+	MimeType TEXT,
+	Author TEXT,
+	URL TEXT NOT NULL,
+	License TEXT,
+	MD5 TEXT NOT NULL,
+	DiscussionID INTEGER,
+	CONSTRAINT Files_Discussions_FK FOREIGN KEY (DiscussionID) REFERENCES Discussions(ID) ON DELETE CASCADE
 );
