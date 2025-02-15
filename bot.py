@@ -1,21 +1,27 @@
-import nextcord, config, sqlite3, math
+import nextcord, config, sqlite3, math, logging, sys
 from json import dumps
 from random import randint
-#from time import time
 from datetime import datetime
 from os import path,makedirs
 from asyncio import sleep
 from nextcord.ext import commands, tasks
 from nextcord.ui import Select, Button, button, View
-from moodleUtils import *
+from utils.moodleUtils import *
+from utils.loggingUtils import CustomFilter, CustomFormatter
 
 client = commands.Bot(intents=nextcord.Intents.default())
-#client.remove_command("help")
+logger = logging.getLogger("ElearnOBot")
+logger.setLevel(logging.INFO)
+handler = logging.StreamHandler(sys.stdout)
+handler.setFormatter(CustomFormatter())
+logger.addFilter(CustomFilter())
+logger.addHandler(handler)
 
 if not path.exists(config.SQLITE_DB_PATH):
     parents , f = path.split(config.SQLITE_DB_PATH)
-    makedirs(parents)
-    print("Creating database and tables...",end=" ")
+    if len(parents) > 0:
+        makedirs(parents)
+    logger.info("Creating database and tables...")
     with open("Database/tables.sql", "r") as sql:
         script = sql.read()
         connector = sqlite3.connect(config.SQLITE_DB_PATH)
@@ -23,9 +29,9 @@ if not path.exists(config.SQLITE_DB_PATH):
         cursor.executescript(script)
         connector.commit()
         connector.close()
-        print("Done!")
+    logger.info("Database creation was successful!")
 else:
-    print("Database file found! Skipping database and table creation!")
+    logger.info("Database file found! Skipping database and table creation!")
 
 def filesizeConversion(bytes):
     out = int(bytes)/1024.0
@@ -143,9 +149,7 @@ class discussionsView(View):
 
         async def selectCallback(interaction: nextcord.Interaction):
             dc_print(f"User {interaction.user} selected course with ID {courseSelect.values[0]} in the Discussions menu") 
-        #     if courseSelect.values[0]=="12526":
-        #         await interaction.response.send_message("Noice", ephemeral=True) # Τηλεπ 1 much?
-            
+
             connector = sqlite3.connect(config.SQLITE_DB_PATH)
             cursor = connector.cursor()
             self.discussionData = cursor.execute("SELECT Name,ID,URL FROM Discussions WHERE courseID=?", (int(courseSelect.values[0]),)).fetchall()
@@ -215,7 +219,6 @@ async def check():
     sleepAmount = randint(0,30)*60
     if sleepAmount > 0:
         await sleep(sleepAmount)
-    #print("Initializing refresh...")
     courses= []
     moodle = moodleInterface()
     notificationCh = client.get_channel(config.NOTIFICATION_CHANNEL)
@@ -224,7 +227,13 @@ async def check():
     getCoursesAPIResponse = moodle.getCourses() #we will need this later for debugging ;)
     courseIDs = [course["id"] for course in getCoursesAPIResponse]
     #get all assignment details in a single call
-    coursesAssignmentDetails = moodle.getAssignments(courseIDs=courseIDs)["courses"]
+    assignments = moodle.getAssignments(courseIDs=courseIDs)
+    if not "exception" in assignments:
+        coursesAssignmentDetails = moodle.getAssignments(courseIDs=courseIDs)["courses"]
+    else:
+        coursesAssignmentDetails = []
+        message = assignments["message"]
+        logger.error(f"Could not fetch assignments! Reason: {message}", extra={"service_name": "MOODLE"})
     for courseIndex,course in enumerate(getCoursesAPIResponse):
         id = course["id"]
         c = Course(
@@ -584,12 +593,12 @@ async def check():
     mdl_print("Refresh finished!")
 
 def mdl_print(text):
-    print(f"{str(datetime.now())} - [MOODLE]  {text}")
+    logger.info(text, extra={"service_name": "MOODLE"})
 
 def dc_print(text):
-    print(f"{str(datetime.now())} - [DISCORD] {text}")
+    logger.info(text, extra={"service_name": "DISCORD"})
 
 def dl_print(text):
-    print(f"{str(datetime.now())} - [DLOADER] {text}")
+    logger.info(text, extra={"service_name": "DOWNLOADER"})
 
 client.run(config.BOT_TOKEN)

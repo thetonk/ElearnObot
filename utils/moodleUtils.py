@@ -155,8 +155,8 @@ class Course:
         for unit in moodle.getCourseData(courseID=self.ID):
             modules = unit["modules"]
             for module in modules:
-                moduleType = module["modplural"]
-                if moduleType == "Forums":
+                moduleType = module["modname"]
+                if moduleType == "forum":
                     forumID = module["instance"]
                     discussions = []
                     for discussion in moodle.getForumDiscussions(forumID=forumID)["discussions"]:
@@ -192,14 +192,14 @@ class Course:
                     ))
 
 
-                elif moduleType == "Quizzes":
+                elif moduleType == "quiz":
                     self.quizzes.append(Quiz(
                         name=module["name"],
                         quizID=module["id"],
                         quizURL=module["url"]
                     ))
 
-                elif moduleType == "Assignments":
+                elif moduleType == "assign":
                     self.assignments.append(Assignment(
                         name = module["name"],
                         assignmentID = module["id"],
@@ -207,20 +207,20 @@ class Course:
                         timeOpened = module["dates"][0]["timestamp"] if "dates" in module and len(module["dates"]) == 2 else 0,
                         timeDue = module["dates"][1]["timestamp"] if "dates" in module and len(module["dates"]) == 2 else 0
                     ))
-                elif moduleType == "Workshops":
+                elif moduleType == "workshop":
                     self.workshops.append(Workshop(
                         name = module["name"],
                         workshopID = module["id"],
                         workshopURL = module["url"]
                     ))
 
-                elif moduleType == "Labels":
+                elif moduleType == "label":
                     soup = BeautifulSoup(module["description"],"html.parser")
                     self.labels.append(Label(
                         description = soup.get_text()
                     ))
 
-                elif moduleType == "Pages":
+                elif moduleType == "page":
 
                     #NOTE: pages always have one index.html file which is their text content.
                     
@@ -234,10 +234,9 @@ class Course:
                         description=soup.get_text()
                     ))
 
-                if "contents" in module and moduleType != "Pages" and moduleType != "Books":
+                if "contents" in module and moduleType != "page" and moduleType != "book":
                     files = module["contents"]
                     for file in files:
-                        #print("FILENAME "+file["filename"])
                         self.files.append(File(
                             name=file["filename"],
                             path=file["filepath"],
