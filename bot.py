@@ -79,7 +79,9 @@ class filesView(View):
         for row in data:
             myoptions.append(nextcord.SelectOption(label=row[0],value=str(row[1])))
 
-        courseSelect = Select(placeholder="Choose a course", min_values=1, max_values=1, options=myoptions)
+        # Discord allows us to send up to 25 options, so we must limit them to 25 and warn user
+        courseSelect = Select(placeholder="Choose a course", min_values=1, max_values=1, options=myoptions[:25])
+        warn_user = True if len(myoptions) > 25 else False
 
         async def selectCallback(interaction: nextcord.Interaction):  
             dc_print(f"User {interaction.user} selected course with ID {courseSelect.values[0]} in the Files menu")        
@@ -92,7 +94,8 @@ class filesView(View):
             for row in self.fileData[:config.FILES_PER_PAGE]:
                 embed.add_field(name=row[0],value=f"{filesizeConversion(row[3])} | [Download]({row[2].replace('webservice/', '')})")
             dc_print(f"Responding with {self.totalPages} pages!")
-            await interaction.response.edit_message(content="", embed=embed, view=self)
+            message = "Warning! You are registered to more than 25 courses. You can select from max 25 courses" if warn_user else ""
+            await interaction.response.edit_message(content=message, embed=embed, view=self)
 
         courseSelect.callback = selectCallback
         self.add_item(courseSelect)
@@ -145,11 +148,12 @@ class discussionsView(View):
         for row in data:
             myoptions.append(nextcord.SelectOption(label=row[0],value=str(row[1])))
 
-        courseSelect = Select(placeholder="Choose a course", min_values=1, max_values=1, options=myoptions)
+        # Discord allows us to send up to 25 options, so we must limit them to 25 and warn user
+        courseSelect = Select(placeholder="Choose a course", min_values=1, max_values=1, options=myoptions[:25])
+        warn_user = True if len(myoptions) > 25 else False
 
         async def selectCallback(interaction: nextcord.Interaction):
             dc_print(f"User {interaction.user} selected course with ID {courseSelect.values[0]} in the Discussions menu") 
-
             connector = sqlite3.connect(config.SQLITE_DB_PATH)
             cursor = connector.cursor()
             self.discussionData = cursor.execute("SELECT Name,ID,URL FROM Discussions WHERE courseID=?", (int(courseSelect.values[0]),)).fetchall()
@@ -159,7 +163,8 @@ class discussionsView(View):
             for row in self.discussionData[:config.DISCUSSIONS_PER_PAGE]:
                 embed.add_field(name=row[0],value=f"[Link]({row[2]})")
             dc_print(f"Responding with {self.totalPages} pages!")
-            await interaction.response.edit_message(content="", embed=embed, view=self)
+            message = "Warning! You are registered to more than 25 courses. You can select from max 25 courses" if warn_user else ""
+            await interaction.response.edit_message(content=message, embed=embed, view=self)
 
         courseSelect.callback = selectCallback
         self.add_item(courseSelect)
@@ -204,12 +209,12 @@ async def on_ready():
     mdl_print("Started!")
 
 @client.slash_command(name="files", description="Show courses\' files")
-async def fileMenu(interaction):
+async def fileMenu(interaction: nextcord.Interaction):
     dc_print(f"User {interaction.user} used /files command on #{interaction.channel}")
     await interaction.response.send_message("Select a course:", view=filesView(), ephemeral=True)
 
 @client.slash_command(name="discussions", description="Show courses\' discussions")
-async def discussionMenu(interaction):
+async def discussionMenu(interaction: nextcord.Interaction):
     dc_print(f"User {interaction.user} used /discussions command on #{interaction.channel}")
     await interaction.response.send_message("Select a course:", view=discussionsView(), ephemeral=True)
 
@@ -225,7 +230,12 @@ async def check():
     dc_print(f"Got notification channel #{notificationCh.name}")
     mdl_print("Refreshing courses")
     getCoursesAPIResponse = moodle.getCourses() #we will need this later for debugging ;)
-    courseIDs = [course["id"] for course in getCoursesAPIResponse]
+    try:
+        courseIDs = [int(course["id"]) for course in getCoursesAPIResponse]
+    except TypeError:
+        mdl_print(getCoursesAPIResponse, True)
+        return
+
     #get all assignment details in a single call
     assignments = moodle.getAssignments(courseIDs=courseIDs)
     if not "exception" in assignments:
@@ -285,6 +295,10 @@ async def check():
 
     connector = sqlite3.connect(config.SQLITE_DB_PATH)
     cursor = connector.cursor()
+
+    #enable foreign key actions, sqlite disables them by default
+    cursor.execute("PRAGMA foreign_keys = ON")
+
     courseCount = cursor.execute("SELECT COUNT(courseID) FROM Courses").fetchone()[0]
     FIRST_RUN = True
 
@@ -587,18 +601,31 @@ async def check():
                         await notificationCh.send(embed=embed)
                     elif len(message) > 4096:
                         await messageSplitter(notificationCh, message, config.FILES_PER_EMBED, courseItem.lower(), course, state, config.FILE_EMBED_COLOR)
+
+    # Delete older courses that user is not currently enrolled in
+    course_delete_query = "DELETE FROM Courses WHERE courseID NOT IN ({})".format(", ".join("?" * len(courseIDs)))
+    cursor.execute(course_delete_query, tuple(courseIDs))
     FIRST_RUN = False
     connector.commit()
     connector.close()
     mdl_print("Refresh finished!")
 
-def mdl_print(text):
-    logger.info(text, extra={"service_name": "MOODLE"})
+def mdl_print(text, error=False):
+    if not error:
+        logger.info(text, extra={"service_name": "MOODLE"})
+    else:
+        logger.error(text, extra={"service_name": "MOODLE"})
 
-def dc_print(text):
-    logger.info(text, extra={"service_name": "DISCORD"})
+def dc_print(text, error=False):
+    if not error:
+        logger.info(text, extra={"service_name": "DISCORD"})
+    else:
+        logger.error(text, extra={"service_name": "DISCORD"})
 
-def dl_print(text):
-    logger.info(text, extra={"service_name": "DOWNLOADER"})
+def dl_print(text, error=False):
+    if not error:
+        logger.info(text, extra={"service_name": "DOWNLOADER"})
+    else:
+        logger.error(text, extra={"service_name": "DOWNLOADER"})
 
 client.run(config.BOT_TOKEN)
