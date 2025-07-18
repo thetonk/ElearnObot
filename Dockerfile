@@ -1,8 +1,7 @@
-FROM python:3.9-slim-bullseye
+FROM python:3.13-alpine
 WORKDIR /elearnObot
 LABEL Maintainer="Spyros"
 LABEL Version="1.1"
 COPY . .
-ARG DEBIAN_FRONTEND=noninteractive
 RUN pip3 install --no-cache-dir -r requirements.txt
 CMD ["python3","-u","bot.py"]
