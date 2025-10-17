@@ -4,7 +4,7 @@ from urllib.parse import urlparse, parse_qs
 
 headers = {"User-Agent":"MoodleMobile 420.69"} # the server checks if we are the moodle app
 
-qrURL = input("Give the QR URL: ")
+qrURL = input("Give the QR URL: ").replace("&amp;", "&")
 query = urlparse(qrURL).query
 data_dict = parse_qs(query)
 print(f"QR token: {data_dict['qrlogin'][0]}, User ID: {data_dict['userid'][0]}")
