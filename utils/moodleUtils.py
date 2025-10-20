@@ -1,6 +1,5 @@
-import requests, config
+import requests, config, os
 from bs4 import BeautifulSoup
-from os import makedirs, path
 
 USER_AGENT = "MoodleMobile 4.1.1"
 HEADERS = {"User-Agent": USER_AGENT}
@@ -65,22 +64,22 @@ class File:
         self.moduleID = moduleID
     
     def download(self, downloadPath):
-        dest = path.join(downloadPath, self.path[1:])
-        if not path.exists(dest):
-            makedirs(dest)
+        dest = os.path.join(downloadPath, self.path[1:])
+        if not os.path.exists(dest):
+            os.makedirs(dest, exist_ok=True)
         r = requests.get(f"{self.URL}&token={config.API_TOKEN}",headers=HEADERS).content
-        if path.exists(path.join(dest, self.filename)):
+        if os.path.exists(os.path.join(dest, self.filename)):
             count = 1
             while True:
-                if not path.exists(path.join(dest, self.filename.replace(".", f"({count})."))):
-                    with open(path.join(dest, self.filename.replace(".", f"({count}).")), "wb") as f:
+                if not os.path.exists(os.path.join(dest, self.filename.replace(".", f"({count})."))):
+                    with open(os.path.join(dest, self.filename.replace(".", f"({count}).")), "wb") as f:
                         f.write(r)
                         f.flush()
                         f.close()
                     break
                 count += 1
         else:
-            with open(path.join(dest, self.filename), "wb") as f:
+            with open(os.path.join(dest, self.filename), "wb") as f:
                 f.write(r)
                 f.flush()
                 f.close()            

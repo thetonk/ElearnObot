@@ -3,3 +3,4 @@ pyrightconfig.json
 .venv/
 __pycache__/
 *.db
+*.old.py

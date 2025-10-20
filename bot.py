@@ -1,8 +1,7 @@
-import nextcord, config, sqlite3, math, logging, sys
+import nextcord, config, sqlite3, math, logging, sys, socket, os
 from json import dumps
 from random import randint
 from datetime import datetime
-from os import path,makedirs
 from asyncio import sleep
 from nextcord.ext import commands, tasks
 from nextcord.ui import Select, Button, button, View
@@ -17,10 +16,10 @@ handler.setFormatter(CustomFormatter())
 logger.addFilter(CustomFilter())
 logger.addHandler(handler)
 
-if not path.exists(config.SQLITE_DB_PATH):
-    parents , f = path.split(config.SQLITE_DB_PATH)
+if not os.path.exists(config.SQLITE_DB_PATH):
+    parents , f = os.path.split(config.SQLITE_DB_PATH)
     if len(parents) > 0:
-        makedirs(parents)
+        os.makedirs(parents, exist_ok=True)
     logger.info("Creating database and tables...")
     with open("Database/tables.sql", "r") as sql:
         script = sql.read()
@@ -32,6 +31,12 @@ if not path.exists(config.SQLITE_DB_PATH):
     logger.info("Database creation was successful!")
 else:
     logger.info("Database file found! Skipping database and table creation!")
+
+try:
+    socket.gethostbyname(config.DOMAIN)
+except socket.gaierror:
+    logger.critical(f"Cannot resolve {config.DOMAIN}! Please ensure it's a valid server name and your internet connection! Exiting!")
+    sys.exit(1)
 
 def filesizeConversion(bytes):
     out = int(bytes)/1024.0
@@ -55,12 +60,12 @@ async def messageSplitter(channel, message: str, itemsCountPerMessage: int, item
         del items[:itemsCountPerMessage]
 
 def saveAPIResponse(*,jsonResponse, savePath, course):
-    savePath = path.join(savePath,course)
+    savePath = os.path.join(savePath,course)
     filename = f"{round(datetime.timestamp(datetime.now()))}.json"
     print(filename)
-    if not path.exists(path.join(savePath)):
-        makedirs(savePath)
-    with open(path.join(savePath,filename), "w") as out:
+    if not os.path.exists(os.path.join(savePath)):
+        os.makedirs(savePath)
+    with open(os.path.join(savePath,filename), "w") as out:
         out.write(dumps(jsonResponse, indent=5, sort_keys=True))
 
 class filesView(View):
@@ -221,8 +226,8 @@ async def discussionMenu(interaction: nextcord.Interaction):
 @tasks.loop(minutes=config.UPDATE_MINUTES)
 #sample function for updating database
 async def check():
-    sleepAmount = randint(0,30)*60
-    if sleepAmount > 0:
+    if config.RANDOMIZE_UPDATE_INTERVAL:
+        sleepAmount = randint(0,30)*60
         await sleep(sleepAmount)
     courses= []
     moodle = moodleInterface()
@@ -230,9 +235,17 @@ async def check():
     dc_print(f"Got notification channel #{notificationCh.name}")
     mdl_print("Refreshing courses")
     getCoursesAPIResponse = moodle.getCourses() #we will need this later for debugging ;)
+    sendInvalidTokenMessage = True
     try:
         courseIDs = [int(course["id"]) for course in getCoursesAPIResponse]
     except TypeError:
+        if "errorcode" in getCoursesAPIResponse and getCoursesAPIResponse["errorcode"] == "invalidtoken":
+            message = "The Moodle API token has expired! Please renew it!"
+            embed = nextcord.Embed(title="Moodle: Invalid token", description=message, color=config.INVALID_TOKEN_EMBED_COLOR)
+            await client.change_presence(status=nextcord.Status.dnd, activity=nextcord.activity.Game(message))
+            if sendInvalidTokenMessage:
+                await notificationCh.send(embed=embed)
+                sendInvalidTokenMessage = False
         mdl_print(getCoursesAPIResponse, True)
         return
 
@@ -330,7 +343,7 @@ async def check():
                         changeLog["Files"]["CHANGED"] += f"~ [{file.filename}]({file.URL.replace('webservice/', '')}) ({filesizeConversion(file.size)})\n"
                         if config.DOWNLOAD_FILES:
                             dl_print(f"Downloading changed file {file.filename}, {file.size} bytes!")
-                            file.download(path.join(config.DOWNLOAD_DIR, course.name))
+                            file.download(os.path.join(config.DOWNLOAD_DIR, course.name))
                 else:
                     mdl_print(f"New file! URL: {file.URL}")
                     query = '''INSERT OR IGNORE INTO Files(courseID, Filename, Path, Size, TimeModified, MimeType, Author, URL, License, MD5, moduleID) 
@@ -343,7 +356,7 @@ async def check():
                     changeLog["Files"]["NEW"] += f"+ [{file.filename}]({file.URL.replace('webservice/', '')}) ({filesizeConversion(file.size)}) by *{file.author}*\n"
                     if config.DOWNLOAD_FILES:
                         dl_print(f"Downloading new file {file.filename}, {file.size} bytes!")
-                        file.download(path.join(config.DOWNLOAD_DIR, course.name))
+                        file.download(os.path.join(config.DOWNLOAD_DIR, course.name))
             elif file.path == None and file.URL != None: # if file.path is None, it's a link
                 data = cursor.execute(linksCheckQuery, (file.filename, course.ID, file.moduleID)).fetchone()
                 if data != None:
@@ -627,5 +640,6 @@ def dl_print(text, error=False):
         logger.info(text, extra={"service_name": "DOWNLOADER"})
     else:
         logger.error(text, extra={"service_name": "DOWNLOADER"})
+
 
 client.run(config.BOT_TOKEN)
