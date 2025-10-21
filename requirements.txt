@@ -2,3 +2,4 @@ beautifulsoup4
 nextcord
 requests
 colorama
+blake3

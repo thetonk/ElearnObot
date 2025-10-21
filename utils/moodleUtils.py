@@ -1,16 +1,26 @@
-import requests, config, os
+import requests, config, os, blake3
 from bs4 import BeautifulSoup
 
 USER_AGENT = "MoodleMobile 4.1.1"
 HEADERS = {"User-Agent": USER_AGENT}
 
+def hashInternetData(url: str, headers: dict[str, str]) -> str:
+    hexdigest = ""
+    cpus = os.cpu_count()
+    if cpus is None:
+        cpus = 1
+    with requests.get(url, headers=headers, stream=True) as r:
+        hash_function = blake3.blake3(max_threads=cpus)
+        for chunk in r.iter_content(chunk_size=1024**2):
+            hash_function.update(chunk)
+        hexdigest = hash_function.hexdigest()
+    return hexdigest
+
+
 class moodleInterface():
 
     def __init__(self):
         self.URL = "https://{domain}/webservice/rest/server.php?wstoken={token}&moodlewsrestformat=json".format(domain=config.DOMAIN, token=config.API_TOKEN)
-
-    # def generateMD5Hash(self, *,fileURL: str):
-    #     return hashlib.md5(requests.get(fileURL).content).hexdigest() #kinda memory inefficient though
 
     def getCourses(self):
         parameters = {"wsfunction": "core_enrol_get_users_courses", "userid": config.USERID}
@@ -95,11 +105,11 @@ class Discussion:
         self.files=files
 
 class Page:
-    def __init__(self, *,  name, pageID, pageURL, description):
+    def __init__(self, *,  name, pageID, pageURL, hashValue):
         self.name = name
         self.ID = pageID
         self.URL = pageURL
-        self.description = description
+        self.hashValue = hashValue
 
 class Label:
         def __init__(self, *, description):
@@ -135,19 +145,18 @@ class Workshop:
 class Course:
 
     def __init__(self, *,fullName,courseID,summary):
-        self.ID = courseID
-        self.name = fullName
+        self.ID: int = courseID
+        self.name: str = fullName
         soup = BeautifulSoup(summary, "html.parser")
-        self.summary = soup.get_text()
-        self.forums = []
-        self.quizzes = []
-        self.assignments = []
-        self.files = []
-        self.workshops = []
-        self.pages = []
-        self.labels = []
+        self.summary: str = soup.get_text()
+        self.forums: list[Forum] = []
+        self.quizzes: list[Quiz] = []
+        self.assignments: list[Assignment] = []
+        self.files: list[File] = []
+        self.workshops: list[Workshop] = []
+        self.pages: list[Page] = []
+        self.labels: list[Label] = []
         self.URL = f"https://{config.DOMAIN}/course/view.php?id={courseID}"
-        #self.refresh()
 
     def refresh(self):
         moodle = moodleInterface()
@@ -171,7 +180,7 @@ class Course:
                                     mimeType=attachment["mimetype"],
                                     author=discussion["usermodifiedfullname"],
                                     License="",
-                                    moduleID=-1
+                                    moduleID=-1,
                                 ))
                         soup = BeautifulSoup(discussion["message"], "html.parser")
                         discussions.append(Discussion(
@@ -214,23 +223,19 @@ class Course:
                     ))
 
                 elif moduleType == "label":
-                    soup = BeautifulSoup(module["description"],"html.parser")
+                    soup = BeautifulSoup(module["description"], "html.parser")
                     self.labels.append(Label(
                         description = soup.get_text()
                     ))
 
                 elif moduleType == "page":
-
-                    #NOTE: pages always have one index.html file which is their text content.
-                    
                     htmlpath = module["contents"][0]["fileurl"] 
-                    html = requests.get(htmlpath+"&token={}".format(config.API_TOKEN),headers=HEADERS).content
-                    soup = BeautifulSoup(html, "html.parser")
+                    pageHash = hashInternetData(htmlpath+"&token={}".format(config.API_TOKEN), HEADERS)
                     self.pages.append(Page(
                         name = module["name"],
                         pageID = module["id"],
                         pageURL = module["url"],
-                        description=soup.get_text()
+                        hashValue = pageHash
                     ))
 
                 if "contents" in module and moduleType != "page" and moduleType != "book":

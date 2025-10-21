@@ -15,6 +15,7 @@ handler = logging.StreamHandler(sys.stdout)
 handler.setFormatter(CustomFormatter())
 logger.addFilter(CustomFilter())
 logger.addHandler(handler)
+sendInvalidTokenMessage = True
 
 if not os.path.exists(config.SQLITE_DB_PATH):
     parents , f = os.path.split(config.SQLITE_DB_PATH)
@@ -229,13 +230,12 @@ async def check():
     if config.RANDOMIZE_UPDATE_INTERVAL:
         sleepAmount = randint(0,30)*60
         await sleep(sleepAmount)
-    courses= []
+    courses = []
     moodle = moodleInterface()
     notificationCh = client.get_channel(config.NOTIFICATION_CHANNEL)
     dc_print(f"Got notification channel #{notificationCh.name}")
     mdl_print("Refreshing courses")
     getCoursesAPIResponse = moodle.getCourses() #we will need this later for debugging ;)
-    sendInvalidTokenMessage = True
     try:
         courseIDs = [int(course["id"]) for course in getCoursesAPIResponse]
     except TypeError:
@@ -243,6 +243,7 @@ async def check():
             message = "The Moodle API token has expired! Please renew it!"
             embed = nextcord.Embed(title="Moodle: Invalid token", description=message, color=config.INVALID_TOKEN_EMBED_COLOR)
             await client.change_presence(status=nextcord.Status.dnd, activity=nextcord.activity.Game(message))
+            global sendInvalidTokenMessage
             if sendInvalidTokenMessage:
                 await notificationCh.send(embed=embed)
                 sendInvalidTokenMessage = False
@@ -256,7 +257,7 @@ async def check():
     else:
         coursesAssignmentDetails = []
         message = assignments["message"]
-        logger.error(f"Could not fetch assignments! Reason: {message}", extra={"service_name": "MOODLE"})
+        mdl_print(f"Could not fetch assignments! Reason: {message}", True)
     for courseIndex,course in enumerate(getCoursesAPIResponse):
         id = course["id"]
         c = Course(
@@ -274,16 +275,16 @@ async def check():
 
 
     filesCheckQuery = "SELECT TimeModified,URL FROM Files WHERE Filename = ? AND courseID=? AND moduleID=? AND Path=? AND discussionID IS NULL"
-    filesUpdateQuery = '''UPDATE Files SET Path=?, Size=?, TimeModified=?, Author=?, URL=?, License=?, MD5=?
+    filesUpdateQuery = '''UPDATE Files SET Path=?, Size=?, TimeModified=?, Author=?, URL=?, License=?
         WHERE Filename=? AND courseID=? AND moduleID=? AND Path=? AND DiscussionID IS NULL'''
     filesDeleteQuery = "DELETE FROM Files WHERE courseID = ? AND URL = ? AND DiscussionID IS NULL"
 
     linksCheckQuery = "SELECT TimeModified,URL FROM Files WHERE Filename = ? AND courseID=? AND moduleID=? AND Path IS NULL AND DiscussionID IS NULL"
-    linksUpdateQuery = '''UPDATE Files SET Path=NULL, Size=?, TimeModified=?, Author=?, URL=?, License=?, MD5=?
+    linksUpdateQuery = '''UPDATE Files SET Path=NULL, Size=?, TimeModified=?, Author=?, URL=?, License=?
         WHERE Filename=? AND courseID=? AND moduleID=? AND Path IS NULL AND DiscussionID IS NULL'''
 
     filesCheckDiscussionQuery = "SELECT TimeModified,URL FROM Files WHERE Filename = ? AND courseID=? AND Path=? AND DiscussionID=? AND moduleID IS NULL"
-    filesUpdateDiscussionQuery = '''UPDATE Files SET Path=?, Size=?, TimeModified=?, Author=?, URL=?, License=?, MD5=?
+    filesUpdateDiscussionQuery = '''UPDATE Files SET Path=?, Size=?, TimeModified=?, Author=?, URL=?, License=?
     WHERE Filename=? AND courseID=? AND DiscussionID=? AND Path=? AND moduleID IS NULL'''
     filesDeleteDiscussionQuery = "DELETE FROM Files WHERE URL = ? AND courseID=? AND moduleID IS NULL"
 
@@ -294,8 +295,8 @@ async def check():
     discussionsUpdateQuery = "UPDATE Discussions SET Name=?, TimeModified=?, Message=? WHERE ID = ?"
     discussionsDeleteQuery = "DELETE FROM Discussions WHERE ID = ?"
 
-    pagesCheckQuery = "SELECT Name, Description,URL FROM Pages WHERE ID = ?"
-    pagesUpdateQuery = "UPDATE Pages SET Name=?, Description=? WHERE ID = ?"
+    pagesCheckQuery = "SELECT Name, HashValue, URL FROM Pages WHERE ID = ?"
+    pagesUpdateQuery = "UPDATE Pages SET Name=?, HashValue=? WHERE ID = ?"
     pagesDeleteQuery = "DELETE FROM Pages WHERE ID=?"
 
     assignmentsCheckQuery = "SELECT Name, TimeOpened, TimeDue,URL FROM Assignments WHERE ID=?"
@@ -346,12 +347,12 @@ async def check():
                             file.download(os.path.join(config.DOWNLOAD_DIR, course.name))
                 else:
                     mdl_print(f"New file! URL: {file.URL}")
-                    query = '''INSERT OR IGNORE INTO Files(courseID, Filename, Path, Size, TimeModified, MimeType, Author, URL, License, MD5, moduleID) 
-                                VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                    query = '''INSERT OR IGNORE INTO Files(courseID, Filename, Path, Size, TimeModified, MimeType, Author, URL, License, moduleID) 
+                                VALUES (?,?,?,?,?,?,?,?,?,?)
                             '''
                     cursor.execute(query,(
                             (course.ID, file.filename, file.path, file.size, file.timeModified, file.mimeType, file.author, file.URL, file.License,
-                                "", file.moduleID)
+                                file.moduleID)
                         ))
                     changeLog["Files"]["NEW"] += f"+ [{file.filename}]({file.URL.replace('webservice/', '')}) ({filesizeConversion(file.size)}) by *{file.author}*\n"
                     if config.DOWNLOAD_FILES:
@@ -369,12 +370,12 @@ async def check():
                         changeLog["Links"]["CHANGED"] += f"~ [{file.filename}]({file.URL.replace('webservice/', '')})\n"
                 else:
                     mdl_print(f"New link! URL: {file.URL}")
-                    query = '''INSERT OR IGNORE INTO Files(courseID, Filename, Path, Size, TimeModified, MimeType, Author, URL, License, MD5, moduleID) 
-                                VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                    query = '''INSERT OR IGNORE INTO Files(courseID, Filename, Path, Size, TimeModified, MimeType, Author, URL, License, moduleID) 
+                                VALUES (?,?,?,?,?,?,?,?,?,?)
                             '''
                     cursor.execute(query,(
                             (course.ID, file.filename, file.path, file.size, file.timeModified, file.mimeType, file.author, file.URL, file.License,
-                                "", file.moduleID)
+                                file.moduleID)
                         ))
                     changeLog["Links"]["NEW"] += f"+ [{file.filename}]({file.URL.replace('webservice/', '')})\n"
         # check for deletion (URL-based)
@@ -467,20 +468,20 @@ async def check():
         for page in course.pages:
             data = cursor.execute(pagesCheckQuery, (page.ID, )).fetchone()
             if data != None:
-                if (data[0] != page.name or data[1] != page.description):
+                if (data[0] != page.name or data[1] != page.hashValue):
                     if data[0] != page.name:
                         mdl_print(f"Page {data[0]} name changed! New name: {page.name}")
                         changeLog["Pages"]["CHANGED"] += f"~ ~~{data[0]}~~[{page.name}]({page.URL})\n"
                     else:
                         changeLog["Pages"]["CHANGED"] += f"~ [{page.name}]({page.URL})\n"
-                    if data[1] != page.description:
+                    if data[1] != page.hashValue:
                         mdl_print("Page description changed!")
                         changeLog["Pages"]["CHANGED"] += f"    *Page content modified*\n"
-                cursor.execute(pagesUpdateQuery, (page.name, page.description, page.ID, ))
+                cursor.execute(pagesUpdateQuery, (page.name, page.hashValue, page.ID, ))
             else:
                 mdl_print("New page!")
-                cursor.execute("INSERT OR IGNORE INTO Pages(ID, courseID, Name, URL, Description) VALUES (?,?,?,?,?)",(
-                    (page.ID, course.ID, page.name, page.URL, page.description,)
+                cursor.execute("INSERT OR IGNORE INTO Pages(ID, courseID, Name, URL, HashValue) VALUES (?,?,?,?,?)",(
+                    (page.ID, course.ID, page.name, page.URL, page.hashValue,)
                 ))
                 changeLog["Pages"]["NEW"] += f"+ [{page.name}]({page.URL})\n"
         # check for deletion (ID)
@@ -562,8 +563,8 @@ async def check():
 
                     else: #new file
                         mdl_print(f"New attachment found! URL: {attachment.URL}")
-                        query = '''INSERT OR IGNORE INTO Files(courseID, Filename, Path, Size, TimeModified, MimeType, Author, URL, License, MD5, DiscussionID)
-                                VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                        query = '''INSERT OR IGNORE INTO Files(courseID, Filename, Path, Size, TimeModified, MimeType, Author, URL, License, DiscussionID)
+                                VALUES (?,?,?,?,?,?,?,?,?,?)
                                 '''
                         cursor.execute(query,(
                             (course.ID, attachment.filename, attachment.path, attachment.size, attachment.timeModified, attachment.mimeType, attachment.author, attachment.URL, attachment.License,
