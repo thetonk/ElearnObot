@@ -475,7 +475,7 @@ async def check():
                     else:
                         changeLog["Pages"]["CHANGED"] += f"~ [{page.name}]({page.URL})\n"
                     if data[1] != page.hashValue:
-                        mdl_print("Page description changed!")
+                        mdl_print(f"Page content changed!")
                         changeLog["Pages"]["CHANGED"] += f"    *Page content modified*\n"
                 cursor.execute(pagesUpdateQuery, (page.name, page.hashValue, page.ID, ))
             else:
@@ -568,7 +568,7 @@ async def check():
                                 '''
                         cursor.execute(query,(
                             (course.ID, attachment.filename, attachment.path, attachment.size, attachment.timeModified, attachment.mimeType, attachment.author, attachment.URL, attachment.License,
-                                "", discussion.ID)
+                                discussion.ID)
                             ))
 
                         changeLog["Attachments"]["NEW"] += f"+ [{attachment.filename}]({attachment.URL.replace('webservice/', '')}) ({filesizeConversion(attachment.size)}) by *{attachment.author}* in discussion [{discussion.name}]({discussion.URL})\n"

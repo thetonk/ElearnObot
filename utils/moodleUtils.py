@@ -1,19 +1,51 @@
-import requests, config, os, blake3
+import requests, config, os, blake3, tempfile, re, codecs
 from bs4 import BeautifulSoup
 
 USER_AGENT = "MoodleMobile 4.1.1"
 HEADERS = {"User-Agent": USER_AGENT}
 
-def hashInternetData(url: str, headers: dict[str, str]) -> str:
-    hexdigest = ""
+def hashInternetData(url: str, remove_media_nonce=False) -> str:
+    tmpfilepath = ""
+    chunk_size = 1024**2
     cpus = os.cpu_count()
     if cpus is None:
         cpus = 1
-    with requests.get(url, headers=headers, stream=True) as r:
-        hash_function = blake3.blake3(max_threads=cpus)
-        for chunk in r.iter_content(chunk_size=1024**2):
+    with tempfile.NamedTemporaryFile(delete=False) as tmpfile:
+        tmpfilepath = tmpfile.name
+        with requests.get(url, headers=HEADERS, stream=True) as r:
+            for chunk in r.iter_content(chunk_size=chunk_size):
+                tmpfile.write(chunk)
+
+    if remove_media_nonce:
+        # read and replace file in chunks, for memory efficient processing
+        overlap_size = 50 # keep the previous 50 characters of previous chunk for replacement
+        regex_pattern = re.compile(r'id=([\'"])id_videojs_[a-f0-9_]+\1')
+        buffer = ''
+        decoder = codecs.getincrementaldecoder("utf-8")(errors='replace')
+        with tempfile.NamedTemporaryFile(mode="w", delete=False) as tmpfile:
+            new_tmpfilepath = tmpfile.name
+            with open(tmpfilepath, "rb") as f:
+                while True:
+                    text = decoder.decode(f.read(chunk_size))
+                    if not text:
+                        #process the leftover tail as well just in case
+                        processed_text = regex_pattern.sub('', buffer)
+                        tmpfile.write(processed_text)
+                        break
+                    text = buffer + text
+                    processed_text = regex_pattern.sub('', text[:-overlap_size])
+                    tmpfile.write(processed_text)
+                    buffer = text[-overlap_size:]
+            os.remove(tmpfilepath)
+            tmpfilepath = new_tmpfilepath
+        del text, buffer
+
+    hash_function = blake3.blake3(max_threads=cpus)
+    with open(tmpfilepath, "rb") as tmpfile:
+        for chunk in iter(lambda: tmpfile.read(chunk_size), b''):
             hash_function.update(chunk)
-        hexdigest = hash_function.hexdigest()
+    hexdigest = hash_function.hexdigest()
+    os.remove(tmpfilepath)
     return hexdigest
 
 
@@ -75,24 +107,21 @@ class File:
     
     def download(self, downloadPath):
         dest = os.path.join(downloadPath, self.path[1:])
+        chunk_size = 1024**2
         if not os.path.exists(dest):
             os.makedirs(dest, exist_ok=True)
-        r = requests.get(f"{self.URL}&token={config.API_TOKEN}",headers=HEADERS).content
-        if os.path.exists(os.path.join(dest, self.filename)):
+        filepath = os.path.join(dest, self.filename)
+        if os.path.exists(filepath):
             count = 1
             while True:
-                if not os.path.exists(os.path.join(dest, self.filename.replace(".", f"({count})."))):
-                    with open(os.path.join(dest, self.filename.replace(".", f"({count}).")), "wb") as f:
-                        f.write(r)
-                        f.flush()
-                        f.close()
+                filepath = os.path.join(dest, self.filename.replace(".", f"({count})."))
+                if not os.path.exists(filepath):
                     break
                 count += 1
-        else:
-            with open(os.path.join(dest, self.filename), "wb") as f:
-                f.write(r)
-                f.flush()
-                f.close()            
+        with open(filepath, "wb") as file:
+            with requests.get(f"{self.URL}&token={config.API_TOKEN}", headers=HEADERS, stream=True) as r:
+                for chunk in r.iter_content(chunk_size=chunk_size):
+                    file.write(chunk)
 
 class Discussion:
     def __init__(self,*, name, discussionID, forumID, message, timeModified,files):
@@ -229,12 +258,12 @@ class Course:
                     ))
 
                 elif moduleType == "page":
-                    htmlpath = module["contents"][0]["fileurl"] 
-                    pageHash = hashInternetData(htmlpath+"&token={}".format(config.API_TOKEN), HEADERS)
+                    htmlpath = module["contents"][0]["fileurl"]
+                    pageHash = hashInternetData(htmlpath+"&token={}".format(config.API_TOKEN), True)
                     self.pages.append(Page(
                         name = module["name"],
                         pageID = module["id"],
-                        pageURL = module["url"],
+                        pageURL = htmlpath,
                         hashValue = pageHash
                     ))
 
