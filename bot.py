@@ -211,8 +211,6 @@ class discussionsView(View):
 @client.event
 async def on_ready():
     dc_print(f"Connected as {client.user}, starting Moodle thread")
-    check.start()
-    mdl_print("Started!")
 
 @client.slash_command(name="files", description="Show courses\' files")
 async def fileMenu(interaction: nextcord.Interaction):
@@ -642,5 +640,10 @@ def dl_print(text, error=False):
     else:
         logger.error(text, extra={"service_name": "DOWNLOADER"})
 
+@check.before_loop
+async def before_mdl_check():
+    mdl_print("Waiting for discord client to get ready...")
+    await client.wait_until_ready()
 
+check.start()
 client.run(config.BOT_TOKEN)
