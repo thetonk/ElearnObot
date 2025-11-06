@@ -1,51 +1,61 @@
-import requests, config, os, blake3, tempfile, re, codecs
+import requests, config, os, blake3, tempfile, re, codecs, logging
 from bs4 import BeautifulSoup
+from utils import loggingUtils, enums
 
 USER_AGENT = "MoodleMobile 4.1.1"
 HEADERS = {"User-Agent": USER_AGENT}
 
-def hashInternetData(url: str, remove_media_nonce=False) -> str:
+def hashInternetData(logger: logging.Logger, url: str, remove_media_nonce=False) -> str:
     tmpfilepath = ""
     chunk_size = 1024**2
     cpus = os.cpu_count()
     if cpus is None:
         cpus = 1
-    with tempfile.NamedTemporaryFile(delete=False) as tmpfile:
-        tmpfilepath = tmpfile.name
-        with requests.get(url, headers=HEADERS, stream=True) as r:
-            for chunk in r.iter_content(chunk_size=chunk_size):
-                tmpfile.write(chunk)
+    try:
+        with tempfile.NamedTemporaryFile(delete=False) as tmpfile:
+            tmpfilepath = tmpfile.name
+            with requests.get(url, headers=HEADERS, stream=True) as r:
+                for chunk in r.iter_content(chunk_size=chunk_size):
+                    tmpfile.write(chunk)
 
-    if remove_media_nonce:
-        # read and replace file in chunks, for memory efficient processing
-        overlap_size = 50 # keep the previous 50 characters of previous chunk for replacement
-        regex_pattern = re.compile(r'id=([\'"])id_videojs_[a-f0-9_]+\1')
-        buffer = ''
-        decoder = codecs.getincrementaldecoder("utf-8")(errors='replace')
-        with tempfile.NamedTemporaryFile(mode="w", delete=False) as tmpfile:
-            new_tmpfilepath = tmpfile.name
-            with open(tmpfilepath, "rb") as f:
-                while True:
-                    text = decoder.decode(f.read(chunk_size))
-                    if not text:
-                        #process the leftover tail as well just in case
-                        processed_text = regex_pattern.sub('', buffer)
-                        tmpfile.write(processed_text)
-                        break
-                    text = buffer + text
-                    processed_text = regex_pattern.sub('', text[:-overlap_size])
-                    tmpfile.write(processed_text)
-                    buffer = text[-overlap_size:]
+        if remove_media_nonce:
+            # read and replace file in chunks, for memory efficient processing
+            overlap_size = 50 # keep the previous 50 characters of previous chunk for replacement
+            regex_pattern = re.compile(r'id=([\'"])id_videojs_[a-f0-9_]+\1')
+            buffer = ''
+            decoder = codecs.getincrementaldecoder("utf-8")(errors='replace')
+            with tempfile.NamedTemporaryFile(mode="w", delete=False) as tmpfile:
+                new_tmpfilepath = tmpfile.name
+                try:
+                    with open(tmpfilepath, "rb") as f:
+                        while True:
+                            text = decoder.decode(f.read(chunk_size))
+                            if not text:
+                                #process the leftover tail as well just in case
+                                processed_text = regex_pattern.sub('', buffer)
+                                tmpfile.write(processed_text)
+                                break
+                            text = buffer + text
+                            processed_text = regex_pattern.sub('', text[:-overlap_size])
+                            tmpfile.write(processed_text)
+                            buffer = text[-overlap_size:]
+                finally:
+                    os.remove(tmpfilepath)
+                    tmpfilepath = new_tmpfilepath
+            del text, buffer
+
+        hash_function = blake3.blake3(max_threads=cpus)
+        with open(tmpfilepath, "rb") as tmpfile:
+            for chunk in iter(lambda: tmpfile.read(chunk_size), b''):
+                hash_function.update(chunk)
+        hexdigest = hash_function.hexdigest()
+
+    except (Exception, KeyboardInterrupt) as e:
+        logger.error(e, exc_info=True)
+        hexdigest = '#INVALID-HASH#'
+    finally:
+        if os.path.exists(tmpfilepath):
             os.remove(tmpfilepath)
-            tmpfilepath = new_tmpfilepath
-        del text, buffer
-
-    hash_function = blake3.blake3(max_threads=cpus)
-    with open(tmpfilepath, "rb") as tmpfile:
-        for chunk in iter(lambda: tmpfile.read(chunk_size), b''):
-            hash_function.update(chunk)
-    hexdigest = hash_function.hexdigest()
-    os.remove(tmpfilepath)
     return hexdigest
 
 
@@ -174,6 +184,8 @@ class Workshop:
 class Course:
 
     def __init__(self, *,fullName,courseID,summary):
+        self._logger = logging.getLogger("ElearnOBot.Course")
+        self._logger = loggingUtils.prepare_logger(self._logger)
         self.ID: int = courseID
         self.name: str = fullName
         soup = BeautifulSoup(summary, "html.parser")
@@ -259,7 +271,7 @@ class Course:
 
                 elif moduleType == "page":
                     htmlpath = module["contents"][0]["fileurl"]
-                    pageHash = hashInternetData(htmlpath+"&token={}".format(config.API_TOKEN), True)
+                    pageHash = hashInternetData(self._logger, htmlpath+"&token={}".format(config.API_TOKEN), True)
                     self.pages.append(Page(
                         name = module["name"],
                         pageID = module["id"],

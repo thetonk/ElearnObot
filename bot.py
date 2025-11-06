@@ -6,15 +6,12 @@ from asyncio import sleep
 from nextcord.ext import commands, tasks
 from nextcord.ui import Select, Button, button, View
 from utils.moodleUtils import *
-from utils.loggingUtils import CustomFilter, CustomFormatter
+from utils.loggingUtils import prepare_logger
+from utils.enums import ServiceName
 
 client = commands.Bot(intents=nextcord.Intents.default())
 logger = logging.getLogger("ElearnOBot")
-logger.setLevel(logging.INFO)
-handler = logging.StreamHandler(sys.stdout)
-handler.setFormatter(CustomFormatter())
-logger.addFilter(CustomFilter())
-logger.addHandler(handler)
+logger = prepare_logger(logger)
 sendInvalidTokenMessage = True
 
 if not os.path.exists(config.SQLITE_DB_PATH):
@@ -210,7 +207,7 @@ class discussionsView(View):
 
 @client.event
 async def on_ready():
-    dc_print(f"Connected as {client.user}, starting Moodle thread")
+    dc_print(f"Connected as {client.user}, bot ready!")
 
 @client.slash_command(name="files", description="Show courses\' files")
 async def fileMenu(interaction: nextcord.Interaction):
@@ -337,7 +334,7 @@ async def check():
                         mdl_print(f"File {file.filename} got updated! URL: {file.URL}")
                         cursor.execute(filesUpdateQuery, (
                                 file.path, file.size, file.timeModified,
-                                file.author, file.URL, file.License, "",file.filename, course.ID, file.moduleID, file.path)
+                                file.author, file.URL, file.License, file.filename, course.ID, file.moduleID, file.path)
                             )
                         changeLog["Files"]["CHANGED"] += f"~ [{file.filename}]({file.URL.replace('webservice/', '')}) ({filesizeConversion(file.size)})\n"
                         if config.DOWNLOAD_FILES:
@@ -363,7 +360,7 @@ async def check():
                         mdl_print(f"Link {file.filename} got updated! URL: {file.URL}")
                         cursor.execute(linksUpdateQuery, (
                                 file.size, file.timeModified,
-                                file.author, file.URL, file.License, "",file.filename, course.ID, file.moduleID)
+                                file.author, file.URL, file.License, file.filename, course.ID, file.moduleID)
                             )
                         changeLog["Links"]["CHANGED"] += f"~ [{file.filename}]({file.URL.replace('webservice/', '')})\n"
                 else:
@@ -556,7 +553,7 @@ async def check():
                             mdl_print(f"Discussion attachment modified! New link: {attachment.URL}")
                             cursor.execute(filesUpdateDiscussionQuery, (
                                 attachment.path, attachment.size, attachment.timeModified,
-                                attachment.author, attachment.URL, attachment.License, "",attachment.filename, course.ID, discussion.ID, attachment.path))
+                                attachment.author, attachment.URL, attachment.License, attachment.filename, course.ID, discussion.ID, attachment.path))
                             changeLog["Attachments"]["CHANGED"] += f"~ [{attachment.filename}]({attachment.URL.replace('webservice/', '')}) ({filesizeConversion(attachment.size)})\n"
 
                     else: #new file
@@ -624,21 +621,21 @@ async def check():
 
 def mdl_print(text, error=False):
     if not error:
-        logger.info(text, extra={"service_name": "MOODLE"})
+        logger.info(text, extra={"service_name": ServiceName.MOODLE})
     else:
-        logger.error(text, extra={"service_name": "MOODLE"})
+        logger.error(text, extra={"service_name": ServiceName.MOODLE})
 
 def dc_print(text, error=False):
     if not error:
-        logger.info(text, extra={"service_name": "DISCORD"})
+        logger.info(text, extra={"service_name": ServiceName.DISCORD})
     else:
-        logger.error(text, extra={"service_name": "DISCORD"})
+        logger.error(text, extra={"service_name": ServiceName.DISCORD})
 
 def dl_print(text, error=False):
     if not error:
-        logger.info(text, extra={"service_name": "DOWNLOADER"})
+        logger.info(text, extra={"service_name": ServiceName.DOWNLOADER})
     else:
-        logger.error(text, extra={"service_name": "DOWNLOADER"})
+        logger.error(text, extra={"service_name": ServiceName.DOWNLOADER})
 
 @check.before_loop
 async def before_mdl_check():

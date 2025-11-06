@@ -1,5 +1,6 @@
 import logging
 import platform
+import sys
 from colorama import Fore, just_fix_windows_console
 
 if platform.system() == "Windows":
@@ -26,3 +27,12 @@ class CustomFormatter(logging.Formatter):
         log_fmt = self.FORMATS.get(record.levelno)
         formatter = logging.Formatter(log_fmt)
         return formatter.format(record)
+
+
+def prepare_logger(logger: logging.Logger) -> logging.Logger:
+    logger.setLevel(logging.INFO)
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(CustomFormatter())
+    logger.addFilter(CustomFilter())
+    logger.addHandler(handler)
+    return logger
