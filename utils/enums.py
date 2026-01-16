@@ -3,3 +3,4 @@ class ServiceName:
     MOODLE = "MOODLE"
     MAIN = "MAIN"
     DOWNLOADER = "DOWNLOADER"
+    CONFIG = "CONFIG_MANAGER"

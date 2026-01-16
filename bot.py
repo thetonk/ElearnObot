@@ -1,14 +1,18 @@
-import nextcord, config, sqlite3, math, logging, sys, socket, os
+import nextcord, sqlite3, math, logging, sys, socket, os
 from json import dumps
 from random import randint
 from datetime import datetime
 from asyncio import sleep
 from nextcord.ext import commands, tasks
 from nextcord.ui import Select, Button, button, View
-from utils.moodleUtils import *
+from utils import moodleUtils as mdlutils
 from utils.loggingUtils import prepare_logger
 from utils.enums import ServiceName
+from utils.config import Config
 
+
+config = Config("config2.marianna.old.cfg")
+config.load()
 client = commands.Bot(intents=nextcord.Intents.default())
 logger = logging.getLogger("ElearnOBot")
 logger = prepare_logger(logger)
@@ -43,7 +47,7 @@ def filesizeConversion(bytes):
         return "{}MB".format(round(out, 2))
     return "{}KB".format(round(out, 2))
 
-async def messageSplitter(channel, message: str, itemsCountPerMessage: int, itemType: str, course: Course, itemState: str, embedColor: int):
+async def messageSplitter(channel, message: str, itemsCountPerMessage: int, itemType: str, course: mdlutils.Course, itemState: str, embedColor: int):
     items = message.split("\n")
     del items[len(items) - 1] #delete last empty item, since it's useless
     totalMessages = math.ceil(len(items) / float(itemsCountPerMessage))
@@ -85,6 +89,7 @@ class filesView(View):
         # Discord allows us to send up to 25 options, so we must limit them to 25 and warn user
         courseSelect = Select(placeholder="Choose a course", min_values=1, max_values=1, options=myoptions[:25])
         warn_user = True if len(myoptions) > 25 else False
+        self.fileData: list[str]
 
         async def selectCallback(interaction: nextcord.Interaction):  
             dc_print(f"User {interaction.user} selected course with ID {courseSelect.values[0]} in the Files menu")        
@@ -226,7 +231,7 @@ async def check():
         sleepAmount = randint(0,30)*60
         await sleep(sleepAmount)
     courses = []
-    moodle = moodleInterface()
+    moodle = mdlutils.moodleInterface(config.DOMAIN, config.API_TOKEN, config.USERID)
     notificationCh = client.get_channel(config.NOTIFICATION_CHANNEL)
     dc_print(f"Got notification channel #{notificationCh.name}")
     mdl_print("Refreshing courses")
@@ -255,7 +260,10 @@ async def check():
         mdl_print(f"Could not fetch assignments! Reason: {message}", True)
     for courseIndex,course in enumerate(getCoursesAPIResponse):
         id = course["id"]
-        c = Course(
+        c = mdlutils.Course(
+            mdl_domain=config.DOMAIN,
+            mdl_token=config.API_TOKEN,
+            mdl_userid=config.USERID,
             fullName=course["fullname"],
             courseID=id,
             summary=course["summary"]

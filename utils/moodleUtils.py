@@ -1,4 +1,4 @@
-import requests, config, os, blake3, tempfile, re, codecs, logging
+import requests, os, blake3, tempfile, re, codecs, logging
 from bs4 import BeautifulSoup
 from utils import loggingUtils, enums
 
@@ -61,11 +61,15 @@ def hashInternetData(logger: logging.Logger, url: str, remove_media_nonce=False)
 
 class moodleInterface():
 
-    def __init__(self):
-        self.URL = "https://{domain}/webservice/rest/server.php?wstoken={token}&moodlewsrestformat=json".format(domain=config.DOMAIN, token=config.API_TOKEN)
+    def __init__(self, mdl_domain, mdl_token, mdl_userid):
+        self._mdl_domain = mdl_domain
+        self._mdl_token = mdl_token
+        self._mdl_userid = mdl_userid
+        self.URL = "https://{domain}/webservice/rest/server.php?wstoken={token}&moodlewsrestformat=json".format(domain=self._mdl_domain, 
+                                                                                                                token=self._mdl_token)
 
     def getCourses(self):
-        parameters = {"wsfunction": "core_enrol_get_users_courses", "userid": config.USERID}
+        parameters = {"wsfunction": "core_enrol_get_users_courses", "userid": self._mdl_userid}
         r  = requests.get(self.URL, params=parameters, headers=HEADERS).json()
         return r
 
@@ -104,7 +108,8 @@ class moodleInterface():
 
 
 class File:
-    def __init__(self, *, name, path,size, timeModified, mimeType,author, fileURL, License, moduleID):
+    def __init__(self, *, mdl_token, name, path,size, timeModified, mimeType,author, fileURL, License, moduleID):
+        self._token = mdl_token
         self.filename = name
         self.path = path
         self.size = size
@@ -129,16 +134,16 @@ class File:
                     break
                 count += 1
         with open(filepath, "wb") as file:
-            with requests.get(f"{self.URL}&token={config.API_TOKEN}", headers=HEADERS, stream=True) as r:
+            with requests.get(f"{self.URL}&token={self._token}", headers=HEADERS, stream=True) as r:
                 for chunk in r.iter_content(chunk_size=chunk_size):
                     file.write(chunk)
 
 class Discussion:
-    def __init__(self,*, name, discussionID, forumID, message, timeModified,files):
+    def __init__(self,*, mdl_domain, name, discussionID, forumID, message, timeModified,files):
         self.name = name
         self.ID = discussionID
         self.forumID = forumID
-        self.URL = "https://{}/mod/forum/discuss.php?d={}".format(config.DOMAIN, discussionID)
+        self.URL = "https://{}/mod/forum/discuss.php?d={}".format(mdl_domain, discussionID)
         self.message = message
         self.timeModified = timeModified
         self.files=files
@@ -183,7 +188,10 @@ class Workshop:
 
 class Course:
 
-    def __init__(self, *,fullName,courseID,summary):
+    def __init__(self, *, mdl_domain, mdl_token, mdl_userid, fullName,courseID,summary):
+        self._mdl_domain = mdl_domain
+        self._mdl_token = mdl_token
+        self._mdl_userid = mdl_userid
         self._logger = logging.getLogger("ElearnOBot.Course")
         self._logger = loggingUtils.prepare_logger(self._logger)
         self.ID: int = courseID
@@ -197,10 +205,10 @@ class Course:
         self.workshops: list[Workshop] = []
         self.pages: list[Page] = []
         self.labels: list[Label] = []
-        self.URL = f"https://{config.DOMAIN}/course/view.php?id={courseID}"
+        self.URL = f"https://{self._mdl_domain}/course/view.php?id={courseID}"
 
     def refresh(self):
-        moodle = moodleInterface()
+        moodle = moodleInterface(self._mdl_domain, self._mdl_token, self._mdl_userid)
         for unit in moodle.getCourseData(courseID=self.ID):
             modules = unit["modules"]
             for module in modules:
@@ -213,6 +221,7 @@ class Course:
                         if "attachments" in  discussion:
                             for attachment in discussion["attachments"]:
                                 attachments.append(File(
+                                    mdl_token=self._mdl_token,
                                     name=attachment["filename"],
                                     path=attachment["filepath"],
                                     timeModified=attachment["timemodified"],
@@ -225,6 +234,7 @@ class Course:
                                 ))
                         soup = BeautifulSoup(discussion["message"], "html.parser")
                         discussions.append(Discussion(
+                            mdl_domain=self._mdl_domain,
                             name=discussion["name"],
                             discussionID=discussion["discussion"],
                             forumID=forumID,
@@ -271,7 +281,7 @@ class Course:
 
                 elif moduleType == "page":
                     htmlpath = module["contents"][0]["fileurl"]
-                    pageHash = hashInternetData(self._logger, htmlpath+"&token={}".format(config.API_TOKEN), True)
+                    pageHash = hashInternetData(self._logger, htmlpath+"&token={}".format(self._mdl_token), True)
                     self.pages.append(Page(
                         name = module["name"],
                         pageID = module["id"],
@@ -283,6 +293,7 @@ class Course:
                     files = module["contents"]
                     for file in files:
                         self.files.append(File(
+                            mdl_token=self._mdl_token,
                             name=file["filename"],
                             path=file["filepath"],
                             fileURL=file["fileurl"],
