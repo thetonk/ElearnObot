@@ -11,7 +11,7 @@ from utils.enums import ServiceName
 from utils.config import Config
 
 
-config = Config("config2.marianna.old.cfg")
+config = Config("config.cfg")
 config.load()
 client = commands.Bot(intents=nextcord.Intents.default())
 logger = logging.getLogger("ElearnOBot")
