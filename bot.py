@@ -1,5 +1,4 @@
-import nextcord, sqlite3, math, logging, sys, socket, os
-from json import dumps
+import nextcord, sqlite3, math, logging, sys, socket, os, json, argparse
 from random import randint
 from datetime import datetime
 from asyncio import sleep
@@ -10,8 +9,12 @@ from utils.loggingUtils import prepare_logger
 from utils.enums import ServiceName
 from utils.config import Config
 
+parser = argparse.ArgumentParser(add_help=True)
+parser.add_argument("-c", "--config-file", type=str, help="Path to bot configuration file", default="config.cfg")
+args = parser.parse_args()
+config_file = args.config_file
 
-config = Config("config.cfg")
+config = Config(config_file)
 config.load()
 client = commands.Bot(intents=nextcord.Intents.default())
 logger = logging.getLogger("ElearnOBot")
@@ -68,7 +71,7 @@ def saveAPIResponse(*,jsonResponse, savePath, course):
     if not os.path.exists(os.path.join(savePath)):
         os.makedirs(savePath)
     with open(os.path.join(savePath,filename), "w") as out:
-        out.write(dumps(jsonResponse, indent=5, sort_keys=True))
+        out.write(json.dumps(jsonResponse, indent=5, sort_keys=True))
 
 class filesView(View):
 
