@@ -1,5 +1,5 @@
-import nextcord, sqlite3, math, logging, sys, socket, os, json, argparse
-from random import randint
+import nextcord, sqlite3, math, logging, sys, socket, os, argparse
+import random
 from datetime import datetime
 from asyncio import sleep
 from nextcord.ext import commands, tasks
@@ -37,6 +37,10 @@ if not os.path.exists(config.SQLITE_DB_PATH):
 else:
     logger.info("Database file found! Skipping database and table creation!")
 
+if config.DOWNLOAD_FILES and not os.path.isdir(config.DOWNLOAD_DIR):
+    logger.info(f"{config.DOWNLOAD_DIR} does not exist! Creating the directory!")
+    os.makedirs(config.DOWNLOAD_DIR, exist_ok=True)
+
 try:
     socket.gethostbyname(config.DOMAIN)
 except socket.gaierror:
@@ -64,14 +68,14 @@ async def messageSplitter(channel, message: str, itemsCountPerMessage: int, item
         await channel.send(embed=embed)
         del items[:itemsCountPerMessage]
 
-def saveAPIResponse(*,jsonResponse, savePath, course):
-    savePath = os.path.join(savePath,course)
-    filename = f"{round(datetime.timestamp(datetime.now()))}.json"
-    print(filename)
-    if not os.path.exists(os.path.join(savePath)):
-        os.makedirs(savePath)
-    with open(os.path.join(savePath,filename), "w") as out:
-        out.write(json.dumps(jsonResponse, indent=5, sort_keys=True))
+#def saveAPIResponse(*,jsonResponse, savePath, course):
+#    savePath = os.path.join(savePath,course)
+#    filename = f"{round(datetime.timestamp(datetime.now()))}.json"
+#    print(filename)
+#    if not os.path.exists(os.path.join(savePath)):
+#        os.makedirs(savePath)
+#    with open(os.path.join(savePath,filename), "w") as out:
+#        out.write(json.dumps(jsonResponse, indent=5, sort_keys=True))
 
 class filesView(View):
 
@@ -227,11 +231,27 @@ async def discussionMenu(interaction: nextcord.Interaction):
     dc_print(f"User {interaction.user} used /discussions command on #{interaction.channel}")
     await interaction.response.send_message("Select a course:", view=discussionsView(), ephemeral=True)
 
+@client.slash_command(name="updatetoken", description="Update ElearnOBot\'s API token by QR code!")
+async def updateMoodleToken(interaction: nextcord.Interaction, qr_url: str = nextcord.SlashOption(name="qr_code_url", description="URL provided from your personal QR code")):
+    qr_data = mdlutils.parse_qr_url(qr_url)
+    if qr_data.success:
+        config.API_TOKEN = str(qr_data.api_token)
+        config.USERID = str(qr_data.user_id)
+        config.save()
+        message = f"Success! Your new Moodle API token is `{qr_data.api_token}` and user ID is `{qr_data.user_id}`"
+        mdl_print(message)
+        await client.change_presence(status=nextcord.Status.online)
+        await interaction.response.send_message(message, ephemeral=True)
+    else:
+        message = f"Failed to update Moodle API token! Reason: {qr_data.error_message}"
+        mdl_print(message, error=True)
+        await client.change_presence(status=nextcord.Status.dnd)
+        await interaction.response.send_message(message, ephemeral=True)
+
 @tasks.loop(minutes=config.UPDATE_MINUTES)
-#sample function for updating database
 async def check():
     if config.RANDOMIZE_UPDATE_INTERVAL:
-        sleepAmount = randint(0,30)*60
+        sleepAmount = random.randint(0,30)*60
         await sleep(sleepAmount)
     courses = []
     moodle = mdlutils.moodleInterface(config.DOMAIN, config.API_TOKEN, config.USERID)

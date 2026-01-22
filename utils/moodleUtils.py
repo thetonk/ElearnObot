@@ -1,11 +1,13 @@
-import requests, os, blake3, tempfile, re, codecs, logging
+import requests, os, tempfile, re, codecs, logging
+import urllib.parse
+import blake3
 from bs4 import BeautifulSoup
-from utils import loggingUtils, enums
+from utils import loggingUtils
 
 USER_AGENT = "MoodleMobile 4.1.1"
 HEADERS = {"User-Agent": USER_AGENT}
 
-def hashInternetData(logger: logging.Logger, url: str, remove_media_nonce=False) -> str:
+def _hashInternetData(logger: logging.Logger, url: str, remove_media_nonce=False) -> str:
     tmpfilepath = ""
     chunk_size = 1024**2
     cpus = os.cpu_count()
@@ -281,7 +283,7 @@ class Course:
 
                 elif moduleType == "page":
                     htmlpath = module["contents"][0]["fileurl"]
-                    pageHash = hashInternetData(self._logger, htmlpath+"&token={}".format(self._mdl_token), True)
+                    pageHash = _hashInternetData(self._logger, htmlpath+"&token={}".format(self._mdl_token), True)
                     self.pages.append(Page(
                         name = module["name"],
                         pageID = module["id"],
@@ -304,3 +306,38 @@ class Course:
                             License=file["license"],
                             moduleID=module["id"]
                          ))
+
+
+class QRData:
+    def __init__(self, user_id=None, api_token=None, private_token=None, error=None):
+        self.user_id = user_id
+        self.api_token = api_token
+        self.private_token = private_token
+        self.error_message = error
+        self.success = True if error is None else False
+
+
+def parse_qr_url(url: str) -> QRData:
+    url = url.replace("&amp;", "&")
+    url = url.replace("moodlemobile://", "")
+    parse_result = urllib.parse.urlparse(url)
+    query, hostname, scheme = parse_result.query, parse_result.netloc, parse_result.scheme
+    query_data = urllib.parse.parse_qs(query)
+    qr_token = query_data["qrlogin"][0]
+    user_id = query_data["userid"][0]
+    try:
+        r = requests.post(f"{scheme}://{hostname}/lib/ajax/service.php?info=tool_mobile_get_tokens_for_qr_login&lang=en_us", headers=HEADERS,
+                            json=[{"index": 0, "methodname": "tool_mobile_get_tokens_for_qr_login",
+                             "args": {"qrloginkey": qr_token, "userid": int(user_id)}
+                            }])
+        r.raise_for_status()
+        response_json = r.json()
+        if not response_json[0]["error"]:
+            response_data = response_json[0]["data"]
+            api_token = response_data["token"]
+            private_token = response_data["privatetoken"]
+            return QRData(user_id, api_token, private_token)
+        else:
+            return QRData(error=response_json[0]["exception"]["message"])
+    except requests.HTTPError as e:
+        return QRData(error=f"Request failed, {hostname} returned status code {e.response.status_code}!")
