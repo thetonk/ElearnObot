@@ -2,7 +2,7 @@ import nextcord, sqlite3, math, logging, sys, socket, os, argparse
 import random
 from datetime import datetime
 from asyncio import sleep
-from nextcord.ext import commands, tasks
+from nextcord.ext import commands, tasks, application_checks
 from nextcord.ui import Select, Button, button, View
 from utils import moodleUtils as mdlutils
 from utils.loggingUtils import prepare_logger
@@ -232,6 +232,7 @@ async def discussionMenu(interaction: nextcord.Interaction):
     await interaction.response.send_message("Select a course:", view=discussionsView(), ephemeral=True)
 
 @client.slash_command(name="updatetoken", description="Update ElearnOBot\'s API token by QR code!")
+@application_checks.has_guild_permissions(administrator=True)
 async def updateMoodleToken(interaction: nextcord.Interaction, qr_url: str = nextcord.SlashOption(name="qr_code_url", description="URL provided from your personal QR code")):
     qr_data = mdlutils.parse_qr_url(qr_url)
     if qr_data.success:
@@ -247,6 +248,12 @@ async def updateMoodleToken(interaction: nextcord.Interaction, qr_url: str = nex
         mdl_print(message, error=True)
         await client.change_presence(status=nextcord.Status.dnd)
         await interaction.response.send_message(message, ephemeral=True)
+
+@updateMoodleToken.error
+async def on_updateMoodleToken_error(interaction: nextcord.Interaction, error):
+    if isinstance(error, application_checks.ApplicationMissingPermissions):
+        await interaction.response.send_message("Only administrators are allowed to run this command!", ephemeral=True)
+
 
 @tasks.loop(minutes=config.UPDATE_MINUTES)
 async def check():
