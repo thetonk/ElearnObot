@@ -40,5 +40,5 @@ Please follow the steps below:
 > [!NOTE]
 > Moodle API token may expire according to the configuration of each moodle instance. In the case of `elearning.auth.gr` expires every 6 months. You will receive notification when this happens. Token can again be automatically refresh by using the `updatetoken` command, as specified above.
 
-> [!WARN]
+> [!WARNING]
 > Use a rational update check interval and enable interval randomization, otherwise you may get suspended from the moodle instance of your university, if you set the interval too low!
