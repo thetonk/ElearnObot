@@ -5,3 +5,5 @@ __pycache__/
 *.db
 *.old.py
 *.old.cfg
+*.cfg
+!config.cfg
