@@ -6,3 +6,4 @@ elearnObot.service
 .gitignore
 Outlines-Schemas/
 *.db
+docs/
