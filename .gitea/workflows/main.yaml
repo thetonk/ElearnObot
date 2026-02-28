@@ -9,6 +9,7 @@ on:
       - 'elearnObot.service'
       - "Outlines-Schemas/**"
       - 'LICENSE'
+      - "docs/**"
 
 jobs:
   gitea-runner:
