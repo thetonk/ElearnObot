@@ -7,3 +7,5 @@ elearnObot.service
 Outlines-Schemas/
 *.db
 docs/
+.gitea/
+.venv/

@@ -2,6 +2,7 @@ import logging
 import platform
 import sys
 from colorama import Fore, just_fix_windows_console
+from utils.enums import ServiceName
 
 if platform.system() == "Windows":
     just_fix_windows_console()
@@ -28,6 +29,27 @@ class CustomFormatter(logging.Formatter):
         formatter = logging.Formatter(log_fmt)
         return formatter.format(record)
 
+class ApplicationLogger:
+    def __init__(self, logger: logging.Logger) -> None:
+        self.logger = logger
+
+    def mdl_print(self, text, error=False):
+        if not error:
+            self.logger.info(text, extra={"service_name": ServiceName.MOODLE})
+        else:
+            self.logger.error(text, extra={"service_name": ServiceName.MOODLE})
+
+    def dc_print(self, text, error=False):
+        if not error:
+            self.logger.info(text, extra={"service_name": ServiceName.DISCORD})
+        else:
+            self.logger.error(text, extra={"service_name": ServiceName.DISCORD})
+
+    def dl_print(self, text, error=False):
+        if not error:
+            self.logger.info(text, extra={"service_name": ServiceName.DOWNLOADER})
+        else:
+            self.logger.error(text, extra={"service_name": ServiceName.DOWNLOADER})
 
 def prepare_logger(logger: logging.Logger) -> logging.Logger:
     logger.setLevel(logging.INFO)
