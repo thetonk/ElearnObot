@@ -31,7 +31,7 @@ Please follow the steps below:
     - The hostname of moodle instance (for example `elearning.auth.gr` for A.U.Th.)
     - Database path on which application's database is created/located
     - In case you want to save all files found by the bot, specify the download directory as well
-5. Run bot: `python3 bot.py -c <path/to/config/file.cfg>`. Specifying the configuration file is optional. By default `config.py` will be used of your current working directory.
+5. Run bot: `python3 bot.py -c <path/to/config/file.cfg>`. Specifying the configuration file is optional. By default `config.cfg` will be used of your current working directory.
 
 ## Configuration
 Refer to the related [wiki page](https://github.com/thetonk/ElearnObot/wiki/Configuration). You will find all the available options there.
