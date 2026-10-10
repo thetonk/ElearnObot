@@ -142,7 +142,7 @@ class discussionsView(View):
         warn_user = True if len(myoptions) > 25 else False
 
         async def selectCallback(interaction: nextcord.Interaction):
-            appLogger.dc_print(f"User {interaction.user} selected course with ID {courseSelect.values[0]} in the Discussions menu") 
+            appLogger.dc_print(f"User {interaction.user} selected course with ID {courseSelect.values[0]} in the Discussions menu")
             connector = sqlite3.connect(config.SQLITE_DB_PATH)
             cursor = connector.cursor()
             self.discussionData = cursor.execute("SELECT Name,ID,URL FROM Discussions WHERE courseID=?", (int(courseSelect.values[0]),)).fetchall()
@@ -198,12 +198,27 @@ async def on_ready():
 @client.slash_command(name="files", description="Show courses\' files")
 async def fileMenu(interaction: nextcord.Interaction):
     appLogger.dc_print(f"User {interaction.user} used /files command on #{interaction.channel}")
-    await interaction.response.send_message("Select a course:", view=filesView(), ephemeral=True)
+    connector = sqlite3.connect(config.SQLITE_DB_PATH)
+    cursor = connector.cursor()
+    n_courses = int(cursor.execute("SELECT COUNT(courseID) FROM Courses").fetchone()[0])
+    connector.close()
+    if n_courses > 0:
+        await interaction.response.send_message("Select a course:", view=filesView(), ephemeral=True)
+    else:
+        error_message = "No courses found! Please make sure that youre enrolled in courses and bot synchronization is finished!"
+        await interaction.response.send_message(error_message, ephemeral=True)
 
 @client.slash_command(name="discussions", description="Show courses\' discussions")
 async def discussionMenu(interaction: nextcord.Interaction):
     appLogger.dc_print(f"User {interaction.user} used /discussions command on #{interaction.channel}")
-    await interaction.response.send_message("Select a course:", view=discussionsView(), ephemeral=True)
+    connector = sqlite3.connect(config.SQLITE_DB_PATH)
+    cursor = connector.cursor()
+    n_courses = int(cursor.execute("SELECT COUNT(courseID) FROM Courses").fetchone()[0])
+    if n_courses > 0:
+        await interaction.response.send_message("Select a course:", view=discussionsView(), ephemeral=True)
+    else:
+        error_message = "No courses found! Please make sure that youre enrolled in courses and bot synchronization is finished!"
+        await interaction.response.send_message(error_message, ephemeral=True)
 
 @client.slash_command(name="updatetoken", description="Update ElearnOBot\'s API token by QR code!")
 @application_checks.has_guild_permissions(administrator=True)
@@ -320,7 +335,7 @@ async def check():
     #enable foreign key actions, sqlite disables them by default
     cursor.execute("PRAGMA foreign_keys = ON")
 
-    courseCount = cursor.execute("SELECT COUNT(courseID) FROM Courses").fetchone()[0]
+    courseCount = int(cursor.execute("SELECT COUNT(courseID) FROM Courses").fetchone()[0])
     FIRST_RUN = True
 
     if courseCount > 0:
