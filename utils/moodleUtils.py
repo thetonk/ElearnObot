@@ -1,6 +1,9 @@
 import requests, os, tempfile, re, codecs, logging
 import urllib.parse
-import blake3
+try:
+    import blake3
+except ImportError:
+    blake3 = None
 from bs4 import BeautifulSoup
 from utils import loggingUtils
 
@@ -46,7 +49,11 @@ def _hashInternetData(logger: logging.Logger, url: str, remove_media_nonce=False
                     tmpfilepath = new_tmpfilepath
             del text, buffer
 
-        hash_function = blake3.blake3(max_threads=cpus)
+        if blake3 is not None:
+            hash_function = blake3.blake3(max_threads=cpus)
+        else:
+            import hashlib
+            hash_function = hashlib.sha256()
         with open(tmpfilepath, "rb") as tmpfile:
             for chunk in iter(lambda: tmpfile.read(chunk_size), b''):
                 hash_function.update(chunk)
@@ -282,13 +289,23 @@ class Course:
                     ))
 
                 elif moduleType == "page":
-                    htmlpath = module["contents"][0]["fileurl"]
-                    pageHash = _hashInternetData(self._logger, htmlpath+"&token={}".format(self._mdl_token), True)
+                    html_content = None
+                    contents = module.get("contents", [])
+                    for item in contents:
+                        if item.get("filename") == "index.html" or item.get("mimetype") == "text/html":
+                            html_content = item
+                            break
+                    if not html_content and len(contents) > 0:
+                        html_content = contents[0]
+
+                    time_modified = html_content.get("timemodified", 0) if html_content else 0
+                    htmlpath = html_content.get("fileurl", module.get("url", "")) if html_content else module.get("url", "")
+
                     self.pages.append(Page(
                         name = module["name"],
                         pageID = module["id"],
                         pageURL = htmlpath,
-                        hashValue = pageHash
+                        hashValue = str(time_modified)
                     ))
 
                 if "contents" in module and moduleType != "page" and moduleType != "book":
