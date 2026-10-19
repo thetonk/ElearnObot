@@ -490,11 +490,7 @@ async def check():
         for page in course.pages:
             data = cursor.execute(pagesCheckQuery, (page.ID, )).fetchone()
             if data != None:
-                is_legacy_hash = len(str(data[1])) == 64 and all(c in "0123456789abcdefABCDEF" for c in str(data[1]))
-                if is_legacy_hash:
-                    # Legacy 64-char BLAKE3 hash: quietly update database to new timestamp without emitting false alerts
-                    cursor.execute(pagesUpdateQuery, (page.name, page.hashValue, page.ID, ))
-                elif (data[0] != page.name or data[1] != page.hashValue):
+                if (data[0] != page.name or data[1] != page.hashValue):
                     if data[0] != page.name:
                         appLogger.mdl_print(f"Page {data[0]} name changed! New name: {page.name}")
                         changeLog["Pages"]["CHANGED"] += f"~ ~~{data[0]}~~[{page.name}]({page.URL})\n"
