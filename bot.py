@@ -499,7 +499,7 @@ async def check():
                     if data[1] != page.hashValue:
                         appLogger.mdl_print(f"Page content changed!")
                         changeLog["Pages"]["CHANGED"] += f"    *Page content modified*\n"
-                cursor.execute(pagesUpdateQuery, (page.name, page.hashValue, page.ID, ))
+                    cursor.execute(pagesUpdateQuery, (page.name, page.hashValue, page.ID, ))
             else:
                 appLogger.mdl_print("New page!")
                 cursor.execute("INSERT OR IGNORE INTO Pages(ID, courseID, Name, URL, HashValue) VALUES (?,?,?,?,?)",(
@@ -638,11 +638,14 @@ async def check():
                     elif len(message) > 4096:
                         await messageSplitter(appLogger, notificationCh, message, config.FILES_PER_EMBED, courseItem.lower(), course, state, config.FILE_EMBED_COLOR)
 
+        connector.commit()
+
     # Delete older courses that user is not currently enrolled in
-    course_delete_query = "DELETE FROM Courses WHERE courseID NOT IN ({})".format(", ".join("?" * len(courseIDs)))
-    cursor.execute(course_delete_query, tuple(courseIDs))
+    if courseIDs:
+        course_delete_query = "DELETE FROM Courses WHERE courseID NOT IN ({})".format(", ".join("?" * len(courseIDs)))
+        cursor.execute(course_delete_query, tuple(courseIDs))
+        connector.commit()
     FIRST_RUN = False
-    connector.commit()
     connector.close()
     appLogger.mdl_print("Refresh finished!")
 
